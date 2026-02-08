@@ -43,8 +43,8 @@
 <body>
 
     <div id="loading-screen">
-        <h2>Chargement de l'aventure...</h2>
-        <div id="load-status">Initialisation du moteur 3D...</div>
+        <h2>Chargement des textures et modèles...</h2>
+        <div id="load-status">Préparation des matériaux...</div>
     </div>
 
     <div id="ui-overlay">
@@ -63,11 +63,13 @@
 
     <div id="modal" style="display:none;">
         <h1 id="modal-title">L'Aventure des Tables</h1>
-        <p id="modal-text">Dirige ton navire, évite les rochers et fonce sur le bateau pirate qui a la bonne réponse !</p>
+        <p id="modal-text">Dirige ton navire vers la bonne réponse et évite les obstacles !</p>
         <button class="start-btn" onclick="startGame()">Hissez les voiles !</button>
     </div>
 
+    <!-- Chargement de Three.js et des extensions nécessaires -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/MTLLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
 
     <script>
@@ -79,27 +81,28 @@
         
         const modelCache = {};
 
+        // Vitesse réduite pour le CE1 (speed diminuée)
         const levels = {
-            1: { tables: [2, 5, 10], speed: 0.15, rockFreq: 0.01 },
-            2: { tables: [2, 3, 4, 5, 10], speed: 0.2, rockFreq: 0.015 },
-            3: { tables: [2, 3, 4, 5, 6, 7, 8, 9, 10], speed: 0.25, rockFreq: 0.02 }
+            1: { tables: [2, 5, 10], speed: 0.08, rockFreq: 0.008 },
+            2: { tables: [2, 3, 4, 5, 10], speed: 0.1, rockFreq: 0.01 },
+            3: { tables: [2, 3, 4, 5, 6, 7, 8, 9, 10], speed: 0.12, rockFreq: 0.015 }
         };
 
-        const filesToLoad = [
-            'ship-medium.obj',
-            'ship-pirate-medium.obj',
-            'rocks-a.obj',
-            'rocks-b.obj',
-            'rocks-c.obj'
+        const pairsToLoad = [
+            { obj: 'ship-medium.obj', mtl: 'ship-medium.mtl' },
+            { obj: 'ship-pirate-medium.obj', mtl: 'ship-medium.mtl' }, // Utilise souvent la même palette
+            { obj: 'rocks-a.obj', mtl: 'rocks-a.mtl' },
+            { obj: 'rocks-b.obj', mtl: 'rocks-b.mtl' },
+            { obj: 'rocks-c.obj', mtl: 'rocks-c.mtl' }
         ];
 
         async function init() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87CEEB);
-            scene.fog = new THREE.Fog(0x87CEEB, 20, 150);
+            scene.fog = new THREE.Fog(0x87CEEB, 20, 180);
 
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 8, 18);
+            camera.position.set(0, 8, 20);
             camera.lookAt(0, 0, -5);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -109,33 +112,42 @@
             const sun = new THREE.DirectionalLight(0xffffff, 1.2);
             sun.position.set(10, 20, 10);
             scene.add(sun);
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 
+            // Décor de mer
             const waterGeo = new THREE.PlaneGeometry(2000, 2000);
-            const waterMat = new THREE.MeshPhongMaterial({ color: 0x006994, shininess: 80, transparent: true, opacity: 0.9 });
+            const waterMat = new THREE.MeshPhongMaterial({ color: 0x006994, shininess: 80, transparent: true, opacity: 0.85 });
             ocean = new THREE.Mesh(waterGeo, waterMat);
             ocean.rotation.x = -Math.PI / 2;
             scene.add(ocean);
 
-            const loader = new THREE.OBJLoader();
+            const mtlLoader = new THREE.MTLLoader();
+            const objLoader = new THREE.OBJLoader();
             
-            for (const fileName of filesToLoad) {
-                document.getElementById('load-status').innerText = `Tentative de chargement : ${fileName}`;
+            // Chargement séquentiel des matériaux et objets
+            for (const item of pairsToLoad) {
+                document.getElementById('load-status').innerText = `Chargement : ${item.obj}...`;
                 try {
-                    // Utilisation d'un chemin relatif propre. 
-                    // Si l'URL échoue, on passe au mode "secours" (Fallback)
-                    const url = `./${fileName}`;
-                    const response = await fetch(url).catch(() => null);
-                    
-                    if (response && response.ok) {
-                        const objText = await response.text();
-                        modelCache[fileName] = loader.parse(objText);
-                        console.log(`Chargé avec succès : ${fileName}`);
-                    } else {
-                        console.warn(`Fichier non trouvé localement : ${fileName}. Utilisation du modèle de secours.`);
+                    // Charger le MTL d'abord
+                    const materials = await new Promise((resolve) => {
+                        mtlLoader.load(item.mtl, resolve, null, () => resolve(null));
+                    });
+
+                    if (materials) {
+                        materials.preload();
+                        objLoader.setMaterials(materials);
                     }
-                } catch (err) {
-                    console.warn(`Erreur lors du fetch de ${fileName}, passage au secours.`);
+
+                    // Charger l'OBJ avec les matériaux appliqués
+                    const object = await new Promise((resolve) => {
+                        objLoader.load(item.obj, resolve, null, () => resolve(null));
+                    });
+
+                    if (object) {
+                        modelCache[item.obj] = object;
+                    }
+                } catch (e) {
+                    console.warn(`Erreur sur ${item.obj}, passage au modèle par défaut.`);
                 }
             }
 
@@ -144,6 +156,7 @@
 
             createPlayerShip();
 
+            // Contrôles
             window.addEventListener('keydown', e => {
                 if(e.key === 'ArrowLeft') keys.left = true;
                 if(e.key === 'ArrowRight') keys.right = true;
@@ -152,13 +165,6 @@
                 if(e.key === 'ArrowLeft') keys.left = false;
                 if(e.key === 'ArrowRight') keys.right = false;
             });
-            
-            window.addEventListener('touchstart', e => {
-                if(e.touches[0].clientX < window.innerWidth/2) keys.left = true;
-                else keys.right = true;
-            });
-            window.addEventListener('touchend', () => { keys.left = false; keys.right = false; });
-
             window.addEventListener('resize', onWindowResize);
             
             animate();
@@ -167,12 +173,12 @@
         function createPlayerShip() {
             playerShip = new THREE.Group();
             if (modelCache['ship-medium.obj']) {
-                const ship = modelCache['ship-medium.obj'].clone();
-                ship.scale.set(0.5, 0.5, 0.5);
-                ship.rotation.y = Math.PI;
-                playerShip.add(ship);
+                const s = modelCache['ship-medium.obj'].clone();
+                s.scale.set(0.6, 0.6, 0.6);
+                s.rotation.y = Math.PI;
+                playerShip.add(s);
             } else {
-                const hull = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4), new THREE.MeshStandardMaterial({color: 0x8B4513}));
+                const hull = new THREE.Mesh(new THREE.BoxGeometry(2, 1.2, 4), new THREE.MeshStandardMaterial({color: 0x8B4513}));
                 playerShip.add(hull);
             }
             scene.add(playerShip);
@@ -180,12 +186,12 @@
 
         function spawnRock() {
             const rock = new THREE.Group();
-            const rockTypes = ['rocks-a.obj', 'rocks-b.obj', 'rocks-c.obj'];
-            const chosen = rockTypes[Math.floor(Math.random() * rockTypes.length)];
+            const types = ['rocks-a.obj', 'rocks-b.obj', 'rocks-c.obj'];
+            const chosen = types[Math.floor(Math.random() * types.length)];
             
             if (modelCache[chosen]) {
                 const r = modelCache[chosen].clone();
-                r.scale.set(0.6, 0.6, 0.6);
+                r.scale.set(0.8, 0.8, 0.8);
                 rock.add(r);
             } else {
                 const geo = new THREE.DodecahedronGeometry(1.5);
@@ -193,7 +199,7 @@
                 rock.add(new THREE.Mesh(geo, mat));
             }
 
-            rock.position.set((Math.random() - 0.5) * 40, 0, -150);
+            rock.position.set((Math.random() - 0.5) * 35, 0, -160);
             scene.add(rock);
             rocks.push(rock);
         }
@@ -214,27 +220,32 @@
                 
                 if (modelCache['ship-pirate-medium.obj']) {
                     const s = modelCache['ship-pirate-medium.obj'].clone();
-                    s.scale.set(0.5, 0.5, 0.5);
+                    s.scale.set(0.6, 0.6, 0.6);
                     shipGroup.add(s);
                 } else {
-                    const hull = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 5), new THREE.MeshStandardMaterial({color: 0x555555}));
+                    const hull = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 5), new THREE.MeshStandardMaterial({color: 0x333333}));
                     shipGroup.add(hull);
                 }
 
+                // Affichage du nombre sur le bateau
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                canvas.width = 128; canvas.height = 128;
-                ctx.fillStyle = 'red';
-                ctx.font = 'bold 80px Arial';
+                canvas.width = 256; canvas.height = 256;
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 120px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText(val, 64, 90);
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 10;
+                ctx.strokeText(val, 128, 160);
+                ctx.fillText(val, 128, 160);
+                
                 const texture = new THREE.CanvasTexture(canvas);
                 const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map: texture}));
-                sprite.position.y = 7;
-                sprite.scale.set(5, 5, 1);
+                sprite.position.y = 8;
+                sprite.scale.set(7, 7, 1);
                 shipGroup.add(sprite);
 
-                shipGroup.position.set((i - 1) * 12, 0, -130);
+                shipGroup.position.set((i - 1) * 14, 0, -140);
                 shipGroup.userData = { value: val };
                 scene.add(shipGroup);
                 pirateShips.push(shipGroup);
@@ -260,24 +271,6 @@
             spawnPirateShips(currentAnswer);
         }
 
-        function loseLife() {
-            lives--;
-            updateHUD();
-            if (lives <= 0) {
-                gameOver("Naufrage !");
-            } else {
-                playerShip.position.x = 0;
-                pirateShips.forEach(s => s.position.z = -130);
-            }
-        }
-
-        function gameOver(msg) {
-            isGameActive = false;
-            document.getElementById('modal').style.display = 'block';
-            document.getElementById('modal-title').innerText = msg;
-            document.getElementById('modal-text').innerText = `Ton score final : ${score}`;
-        }
-
         function updateHUD() {
             document.getElementById('score-display').innerText = `Score : ${score}`;
             document.getElementById('level-display').innerText = `Niveau : ${level}`;
@@ -296,50 +289,67 @@
 
             const config = levels[level];
 
-            if(keys.left && playerShip.position.x > -18) playerShip.position.x -= 0.35;
-            if(keys.right && playerShip.position.x < 18) playerShip.position.x += 0.35;
-            playerShip.rotation.z = (keys.left ? 0.12 : (keys.right ? -0.12 : 0));
-            playerShip.position.y = Math.sin(Date.now() * 0.002) * 0.2;
+            // Mouvement fluide
+            if(keys.left && playerShip.position.x > -18) playerShip.position.x -= 0.25;
+            if(keys.right && playerShip.position.x < 18) playerShip.position.x += 0.25;
+            
+            playerShip.rotation.z = THREE.MathUtils.lerp(playerShip.rotation.z, (keys.left ? 0.15 : (keys.right ? -0.15 : 0)), 0.1);
+            playerShip.position.y = Math.sin(Date.now() * 0.0015) * 0.15;
 
+            // Gestion des rochers
             if(Math.random() < config.rockFreq) spawnRock();
             for(let i = rocks.length - 1; i >= 0; i--) {
-                rocks[i].position.z += config.speed * 45;
-                if(playerShip.position.distanceTo(rocks[i].position) < 4) {
+                rocks[i].position.z += config.speed * 50;
+                if(playerShip.position.distanceTo(rocks[i].position) < 4.5) {
                     scene.remove(rocks[i]);
                     rocks.splice(i, 1);
-                    loseLife();
+                    lives--;
+                    updateHUD();
+                    if(lives <= 0) gameOver("Naufrage !");
                     continue;
                 }
-                if(rocks[i].position.z > 25) {
+                if(rocks[i].position.z > 30) {
                     scene.remove(rocks[i]);
                     rocks.splice(i, 1);
                 }
             }
 
+            // Gestion des bateaux pirates
             pirateShips.forEach(s => {
-                s.position.z += config.speed * 40;
-                if(playerShip.position.distanceTo(s.position) < 5) {
+                s.position.z += config.speed * 45;
+                if(playerShip.position.distanceTo(s.position) < 5.5) {
                     if(s.userData.value === currentAnswer) {
                         score += 20;
-                        if(score % 100 === 0 && level < 3) level++;
+                        if(score > 0 && score % 100 === 0 && level < 3) level++;
                         updateHUD();
                         nextQuestion();
                     } else {
-                        loseLife();
-                        nextQuestion();
+                        lives--;
+                        updateHUD();
+                        if(lives <= 0) gameOver("Battu par les pirates !");
+                        else nextQuestion();
                     }
                 }
             });
 
-            if(pirateShips.length > 0 && pirateShips[0].position.z > 25) {
-                loseLife();
+            // Si on rate les bateaux sans collision
+            if(pirateShips.length > 0 && pirateShips[0].position.z > 30) {
                 nextQuestion();
             }
 
             renderer.render(scene, camera);
         }
 
+        function gameOver(msg) {
+            isGameActive = false;
+            document.getElementById('modal').style.display = 'block';
+            document.getElementById('modal-title').innerText = msg;
+            document.getElementById('modal-text').innerText = `Bravo ! Ton score final : ${score}`;
+        }
+
         init();
     </script>
 </body>
+</html>
+
 </html>
