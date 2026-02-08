@@ -3,116 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bataille des Tables 3D</title>
+    <title>Pirates des Tables 3D - Monde Ouvert</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Arial', sans-serif; }
         canvas { display: block; }
         
-        /* Menu et UI */
-        #ui-layer {
+        #ui {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none;
             color: white;
-            text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
         }
 
-        .menu-card {
-            background: rgba(0, 0, 0, 0.8);
-            padding: 30px;
-            border-radius: 15px;
+        .menu-overlay {
+            position: absolute;
+            background: rgba(0, 20, 40, 0.9);
+            padding: 40px;
+            border-radius: 20px;
             text-align: center;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
             pointer-events: auto;
-            border: 2px solid #f1c40f;
-            max-width: 400px;
+            border: 3px solid #f1c40f;
+            min-width: 320px;
         }
 
         .btn {
-            display: block;
-            width: 100%;
-            padding: 15px;
-            margin: 10px 0;
-            font-size: 1.2rem;
-            cursor: pointer;
-            background: #e67e22;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            transition: transform 0.2s, background 0.2s;
+            display: block; width: 100%; padding: 15px; margin: 10px 0;
+            font-size: 1.1rem; cursor: pointer; background: #e67e22;
+            color: white; border: none; border-radius: 10px;
+            transition: all 0.2s;
         }
 
-        .btn:hover {
-            background: #d35400;
-            transform: scale(1.05);
-        }
+        .btn:hover { background: #d35400; transform: scale(1.05); }
 
-        #game-info {
-            position: absolute;
-            top: 20px;
-            width: 100%;
-            display: flex;
-            justify-content: space-around;
-            font-size: 1.5rem;
-            font-weight: bold;
+        #hud {
             display: none;
+            position: absolute;
+            top: 20px; width: 100%;
+            display: flex; justify-content: space-around;
+            font-size: 1.8rem; font-weight: bold;
         }
 
-        #question-display {
-            background: rgba(0,0,0,0.6);
-            padding: 10px 30px;
-            border-radius: 30px;
-            border: 2px solid white;
+        .label-box {
+            background: rgba(0,0,0,0.5);
+            padding: 10px 25px;
+            border-radius: 15px;
+            border: 2px solid #fff;
+        }
+
+        #controls-hint {
+            position: absolute;
+            bottom: 20px; left: 20px;
+            font-size: 0.9rem;
+            background: rgba(0,0,0,0.4);
+            padding: 10px;
+            border-radius: 5px;
         }
 
         .hidden { display: none !important; }
-        
-        #feedback {
-            position: absolute;
-            top: 50%;
-            font-size: 3rem;
-            font-weight: bold;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.5s;
-        }
     </style>
 </head>
 <body>
-    <div id="ui-layer">
-        <!-- Menu Principal -->
-        <div id="main-menu" class="menu-card">
-            <h1>Pirates des Tables</h1>
-            <p>Choisissez votre difficulté :</p>
+
+    <div id="ui">
+        <div id="main-menu" class="menu-overlay">
+            <h1>⛵ Pirates des Tables</h1>
+            <p>Trouvez le navire avec le bon résultat !</p>
             <button class="btn" onclick="startGame(1)">Niveau 1 (Tables 2, 4, 5, 10)</button>
             <button class="btn" onclick="startGame(2)">Niveau 2 (Tables 2 à 7, 10)</button>
             <button class="btn" onclick="startGame(3)">Niveau 3 (Tables 2 à 10)</button>
         </div>
 
-        <!-- Interface de Jeu -->
-        <div id="game-info">
-            <div id="question-display">Calculez...</div>
-            <div id="score-display">Score: 0</div>
+        <div id="hud" class="hidden">
+            <div class="label-box" id="question">Question ?</div>
+            <div class="label-box" id="score">Score: 0</div>
         </div>
-        
-        <div id="feedback">BIEN JOUÉ !</div>
+
+        <div id="controls-hint" class="hidden">
+            ⌨️ Utilisez les flèches ou ZQSD pour naviguer
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
-        let scene, camera, renderer, ship;
-        let targets = [];
-        let currentLevel = 0;
-        let score = 0;
-        let currentQuestion = { a: 0, b: 0, answer: 0 };
+        // --- Configuration & Variables ---
+        let scene, camera, renderer, playerShip;
+        let enemyShips = [];
+        let ocean;
         let gameActive = false;
+        let score = 0;
+        let currentLevel = 1;
+        let currentQuestion = { a: 0, b: 0, answer: 0 };
+        
+        // Contrôles
+        const keys = { w: false, s: false, a: false, d: false };
+        const speed = 0.15;
+        const turnSpeed = 0.03;
 
         const levels = {
             1: [2, 4, 5, 10],
@@ -120,197 +109,230 @@
             3: [2, 3, 4, 5, 6, 7, 8, 9, 10]
         };
 
+        // --- Initialisation ---
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87ceeb);
+            scene.background = new THREE.Color(0x6fbbe3); // Bleu ciel
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 8, 20);
-            camera.lookAt(0, 0, 0);
-
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
             // Lumières
-            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-            const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-            sun.position.set(5, 10, 7);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambient);
+
+            const sun = new THREE.DirectionalLight(0xffffff, 1);
+            sun.position.set(50, 100, 50);
+            sun.castShadow = true;
             scene.add(sun);
 
-            createOcean();
-            createShip();
+            createWorld();
             
-            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('resize', onResize);
+            window.addEventListener('keydown', (e) => handleKey(e.key.toLowerCase(), true));
+            window.addEventListener('keyup', (e) => handleKey(e.key.toLowerCase(), false));
+
             animate();
         }
 
-        function createOcean() {
-            const geo = new THREE.PlaneGeometry(500, 500);
-            const mat = new THREE.MeshPhongMaterial({ color: 0x006994, transparent: true, opacity: 0.9 });
-            const water = new THREE.Mesh(geo, mat);
-            water.rotation.x = -Math.PI / 2;
-            scene.add(water);
+        function createWorld() {
+            // Océan immense
+            const oceanGeo = new THREE.PlaneGeometry(2000, 2000);
+            const oceanMat = new THREE.MeshPhongMaterial({ 
+                color: 0x1e90ff, 
+                shininess: 100,
+                transparent: true,
+                opacity: 0.8
+            });
+            ocean = new THREE.Mesh(oceanGeo, oceanMat);
+            ocean.rotation.x = -Math.PI / 2;
+            scene.add(ocean);
+
+            // Brouillard pour l'effet d'horizon
+            scene.fog = new THREE.Fog(0x6fbbe3, 50, 400);
+
+            // Créer le bateau du joueur
+            playerShip = createShipMesh(0x2ecc71); // Vert
+            scene.add(playerShip);
         }
 
-        function createShip() {
-            ship = new THREE.Group();
-            // Coque simplifiée
-            const hull = new THREE.Mesh(new THREE.BoxGeometry(4, 1.5, 7), new THREE.MeshPhongMaterial({ color: 0x5d4037 }));
-            hull.position.y = 0.75;
-            ship.add(hull);
+        // Fonction pour créer un bateau simple
+        function createShipMesh(hullColor) {
+            const ship = new THREE.Group();
             
+            // Coque
+            const hull = new THREE.Mesh(
+                new THREE.BoxGeometry(2, 1.2, 5),
+                new THREE.MeshPhongMaterial({ color: hullColor })
+            );
+            hull.position.y = 0.6;
+            ship.add(hull);
+
             // Mât
-            const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 5), new THREE.MeshPhongMaterial({ color: 0x3e2723 }));
-            mast.position.y = 3.5;
+            const mast = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.1, 0.1, 4),
+                new THREE.MeshPhongMaterial({ color: 0x4d2a00 })
+            );
+            mast.position.y = 3;
             ship.add(mast);
 
-            scene.add(ship);
+            // Voile
+            const sail = new THREE.Mesh(
+                new THREE.PlaneGeometry(2.5, 3),
+                new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+            );
+            sail.position.set(0, 3.5, 0.1);
+            ship.add(sail);
+
+            return ship;
         }
 
+        function createEnemyShip(value, x, z) {
+            const group = new THREE.Group();
+            const ship = createShipMesh(0xe74c3c); // Rouge
+            group.add(ship);
+
+            // Étiquette avec le nombre
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 80px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(value, 64, 90);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
+            sprite.position.y = 6;
+            sprite.scale.set(5, 5, 1);
+            group.add(sprite);
+
+            group.position.set(x, 0, z);
+            group.userData = { value: value };
+            
+            scene.add(group);
+            return group;
+        }
+
+        // --- Logique de Jeu ---
         function startGame(level) {
             currentLevel = level;
             score = 0;
             gameActive = true;
             
             document.getElementById('main-menu').classList.add('hidden');
-            document.getElementById('game-info').style.display = 'flex';
-            document.getElementById('score-display').innerText = `Score: ${score}`;
+            document.getElementById('hud').classList.remove('hidden');
+            document.getElementById('controls-hint').classList.remove('hidden');
             
-            nextQuestion();
+            playerShip.position.set(0, 0, 0);
+            playerShip.rotation.y = 0;
+            
+            spawnRound();
         }
 
-        function nextQuestion() {
-            const possibleTables = levels[currentLevel];
-            const a = possibleTables[Math.floor(Math.random() * possibleTables.length)];
-            const b = Math.floor(Math.random() * 11); // 0 à 10
-            
+        function spawnRound() {
+            // Nettoyage ennemis
+            enemyShips.forEach(s => scene.remove(s));
+            enemyShips = [];
+
+            // Nouvelle question
+            const tables = levels[currentLevel];
+            const a = tables[Math.floor(Math.random() * tables.length)];
+            const b = Math.floor(Math.random() * 11);
             currentQuestion = { a, b, answer: a * b };
-            document.getElementById('question-display').innerText = `${a} x ${b} = ?`;
             
-            generateTargets();
-        }
+            document.getElementById('question').innerText = `Où est le navire ${a} x ${b} ?`;
+            document.getElementById('score').innerText = `Score: ${score}`;
 
-        function generateTargets() {
-            // Nettoyer les anciennes cibles
-            targets.forEach(t => scene.remove(t.mesh));
-            targets = [];
-
+            // Générer les réponses
             const answers = [currentQuestion.answer];
-            // Générer 2 fausses réponses
-            while(answers.length < 3) {
-                const wrong = currentQuestion.answer + (Math.floor(Math.random() * 5) + 1) * (Math.random() > 0.5 ? 1 : -1);
+            while(answers.length < 4) {
+                const wrong = currentQuestion.answer + (Math.floor(Math.random() * 10) + 1) * (Math.random() > 0.5 ? 1 : -1);
                 if (wrong >= 0 && !answers.includes(wrong)) answers.push(wrong);
             }
-            
-            // Mélanger
             answers.sort(() => Math.random() - 0.5);
 
-            // Créer les objets 3D (bouées)
+            // Placer les bateaux ennemis en cercle loin du joueur
             answers.forEach((val, i) => {
-                const group = new THREE.Group();
-                
-                // Bouée
-                const buoy = new THREE.Mesh(
-                    new THREE.SphereGeometry(1.2, 16, 16),
-                    new THREE.MeshPhongMaterial({ color: 0xff4444 })
-                );
-                group.add(buoy);
-
-                // Texte (Canvas Texture)
-                const canvas = document.createElement('canvas');
-                canvas.width = 128;
-                canvas.height = 128;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = 'white';
-                ctx.font = 'bold 60px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText(val, 64, 80);
-                
-                const texture = new THREE.CanvasTexture(canvas);
-                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
-                sprite.position.y = 2;
-                sprite.scale.set(3, 3, 1);
-                group.add(sprite);
-
-                group.position.set((i - 1) * 8, 1, -15);
-                group.userData = { value: val };
-                
-                scene.add(group);
-                targets.push({ mesh: group, value: val });
+                const angle = (i / answers.length) * Math.PI * 2;
+                const dist = 60 + Math.random() * 20;
+                const x = Math.cos(angle) * dist;
+                const z = Math.sin(angle) * dist;
+                enemyShips.push(createEnemyShip(val, x, z));
             });
         }
 
-        function onWindowResize() {
+        function handleKey(key, isPressed) {
+            if (key === 'w' || key === 'arrowup' || key === 'z') keys.w = isPressed;
+            if (key === 's' || key === 'arrowdown') keys.s = isPressed;
+            if (key === 'a' || key === 'arrowleft' || key === 'q') keys.a = isPressed;
+            if (key === 'd' || key === 'arrowright') keys.d = isPressed;
+        }
+
+        function checkCollisions() {
+            for (let i = 0; i < enemyShips.length; i++) {
+                const dist = playerShip.position.distanceTo(enemyShips[i].position);
+                if (dist < 4) { // Collision !
+                    const val = enemyShips[i].userData.value;
+                    if (val === currentQuestion.answer) {
+                        score += 10;
+                        spawnRound(); // Prochain tour
+                    } else {
+                        // Petit recul en cas d'erreur
+                        score = Math.max(0, score - 2);
+                        playerShip.translateZ(-5);
+                        document.getElementById('score').innerText = `Score: ${score}`;
+                    }
+                }
+            }
+        }
+
+        function updateCamera() {
+            // Vue 3/4 derrière le bateau
+            const offset = new THREE.Vector3(0, 15, 30);
+            offset.applyQuaternion(playerShip.quaternion);
+            camera.position.lerp(playerShip.position.clone().add(offset), 0.1);
+            camera.lookAt(playerShip.position);
+        }
+
+        function onResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        // Détection du clic sur une cible
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-
-        window.addEventListener('mousedown', (event) => {
-            if (!gameActive) return;
-
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(targets.map(t => t.mesh), true);
-
-            if (intersects.length > 0) {
-                // Trouver l'objet parent (le groupe)
-                let obj = intersects[0].object;
-                while(obj.parent && !obj.userData.value) obj = obj.parent;
-                
-                handleAnswer(obj.userData.value);
-            }
-        });
-
-        function handleAnswer(val) {
-            const feedback = document.getElementById('feedback');
-            
-            if (val === currentQuestion.answer) {
-                score += 10;
-                feedback.innerText = "BIEN JOUÉ !";
-                feedback.style.color = "#2ecc71";
-                showFeedback();
-                nextQuestion();
-            } else {
-                score = Math.max(0, score - 5);
-                feedback.innerText = "OUPS !";
-                feedback.style.color = "#e74c3c";
-                showFeedback();
-            }
-            document.getElementById('score-display').innerText = `Score: ${score}`;
-        }
-
-        function showFeedback() {
-            const feedback = document.getElementById('feedback');
-            feedback.style.opacity = '1';
-            setTimeout(() => { feedback.style.opacity = '0'; }, 1000);
         }
 
         function animate() {
             requestAnimationFrame(animate);
             const time = Date.now() * 0.001;
 
-            if (ship) {
-                ship.rotation.z = Math.sin(time) * 0.05;
-                ship.position.y = Math.sin(time * 0.5) * 0.2;
-            }
+            if (gameActive) {
+                // Mouvements
+                if (keys.w) playerShip.translateZ(-speed);
+                if (keys.s) playerShip.translateZ(speed * 0.5);
+                if (keys.a) playerShip.rotation.y += turnSpeed;
+                if (keys.d) playerShip.rotation.y -= turnSpeed;
 
-            targets.forEach(t => {
-                t.mesh.position.y = 1 + Math.sin(time + t.mesh.position.x) * 0.3;
-            });
+                // Tangage des bateaux (effet eau)
+                playerShip.position.y = Math.sin(time * 2) * 0.1;
+                playerShip.rotation.x = Math.sin(time) * 0.03;
+
+                enemyShips.forEach(s => {
+                    s.position.y = Math.sin(time * 1.5 + s.position.x) * 0.1;
+                    s.rotation.z = Math.cos(time * 0.8) * 0.05;
+                });
+
+                checkCollisions();
+                updateCamera();
+            }
 
             renderer.render(scene, camera);
         }
 
-            init();
+        init();
     </script>
 </body>
 </html>
-
