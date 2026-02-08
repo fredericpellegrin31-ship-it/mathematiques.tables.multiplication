@@ -72,7 +72,9 @@
  */
 const assets = {
     ship: { obj: 'ship-medium.obj', mtl: 'ship-medium.mtl' },
-    rock: { obj: 'rocks-a.obj', mtl: 'rocks-a.mtl' }
+    rock: { obj: 'rocks-a.obj', mtl: 'rocks-a.mtl' },
+    cannon: { obj: 'cannon.obj', mtl: 'cannon.mtl' },
+    ball: { obj: 'cannon-ball.obj', mtl: 'cannon-ball.mtl' }
 };
 
 let scene, camera, renderer, playerShip;
@@ -123,11 +125,13 @@ async function loadAllAssets() {
 
     const loadModel = async (name, paths) => {
         try {
+            // Charger les matériaux (.mtl)
             const mtlRes = await fetch(paths.mtl);
             const mtlText = await mtlRes.text();
             const materials = mtlLoader.parse(mtlText);
             materials.preload();
 
+            // Charger la géométrie (.obj) avec les matériaux appliqués
             const objRes = await fetch(paths.obj);
             const objText = await objRes.text();
             
