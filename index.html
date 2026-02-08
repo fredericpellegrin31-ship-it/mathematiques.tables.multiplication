@@ -207,6 +207,7 @@ async function loadAssets() {
     const objLoader = new THREE.OBJLoader();
     const mtlLoader = new THREE.MTLLoader();
 
+    // Configuration des fichiers correspondants aux ressources montées
     const modelsToLoad = {
         ship: { obj: 'ship-medium.obj', mtl: 'ship-medium.mtl' },
         rock: { obj: 'rocks-a.obj', mtl: 'rocks-a.mtl' },
@@ -215,18 +216,34 @@ async function loadAssets() {
 
     for(const [name, paths] of Object.entries(modelsToLoad)) {
         try {
-            const mtl = await new Promise((res) => mtlLoader.load(paths.mtl, res));
-            mtl.preload();
-            objLoader.setMaterials(mtl);
-            const obj = await new Promise((res) => objLoader.load(paths.obj, res));
-            loadedModels[name] = obj;
+            // Chargement du MTL d'abord
+            const materials = await new Promise((resolve, reject) => {
+                mtlLoader.load(paths.mtl, resolve, undefined, reject);
+            });
+            materials.preload();
+            
+            // Liaison des matériaux à l'OBJ loader
+            objLoader.setMaterials(materials);
+            
+            // Chargement de l'OBJ avec ses matériaux liés
+            const object = await new Promise((resolve, reject) => {
+                objLoader.load(paths.obj, resolve, undefined, reject);
+            });
+            
+            loadedModels[name] = object;
         } catch(e) {
-            loadedModels[name] = new THREE.Mesh(new THREE.BoxGeometry(2,2,2), new THREE.MeshStandardMaterial({color:0x666666}));
+            console.warn(`Erreur de chargement pour ${name}, utilisation d'un mesh par défaut`, e);
+            loadedModels[name] = new THREE.Mesh(
+                new THREE.BoxGeometry(2,2,2), 
+                new THREE.MeshStandardMaterial({color: name === 'ball' ? 0x333333 : 0x666666})
+            );
         }
     }
 }
 
 function setupWorld() {
+    if (!loadedModels.ship) return;
+
     playerShip = loadedModels.ship.clone();
     scene.add(playerShip);
 
@@ -292,9 +309,8 @@ function spawnEnemies() {
         ship.position.set(playerShip.position.x + Math.sin(angle)*dist, 0, playerShip.position.z + Math.cos(angle)*dist);
         ship.userData = { value: val, isCorrect: val === currentQuestion.answer };
         
-        // Nombres remontés (y=12 au lieu de 8)
         const sprite = createTextSprite(val.toString());
-        sprite.position.y = 12;
+        sprite.position.y = 12; // Nombres surélevés
         ship.add(sprite);
 
         scene.add(ship);
@@ -323,7 +339,7 @@ function fireCannon() {
     ball.userData = { velocity: dir.multiplyScalar(1.5), life: 120 };
     scene.add(ball);
     cannonBalls.push(ball);
-    moveState.speed -= 0.05; // Recul
+    moveState.speed -= 0.05; 
 }
 
 function updateProjectiles() {
@@ -364,7 +380,6 @@ function animate() {
     if (isGameOver) return;
     requestAnimationFrame(animate);
 
-    // Contrôles
     if (keys['KeyW'] || keys['ArrowUp']) moveState.speed += moveState.acceleration;
     if (keys['KeyS'] || keys['ArrowDown']) moveState.speed -= moveState.acceleration;
     if (keys['KeyA'] || keys['ArrowLeft']) playerShip.rotation.y += 0.035;
@@ -374,7 +389,6 @@ function animate() {
     const oldPos = playerShip.position.clone();
     playerShip.translateZ(moveState.speed);
 
-    // Collision rochers
     for(const r of rocks) {
         if(playerShip.position.distanceTo(r.position) < r.userData.collisionRadius) {
             playerShip.position.copy(oldPos);
@@ -383,7 +397,6 @@ function animate() {
         }
     }
 
-    // Gestion de la caméra
     let targetCamPos = new THREE.Vector3();
     let lookAtPos = playerShip.position.clone().add(new THREE.Vector3(0, 2, 0));
 
@@ -401,7 +414,6 @@ function animate() {
 
     updateProjectiles();
 
-    // Flottaison
     const t = Date.now() * 0.002;
     playerShip.position.y = Math.sin(t) * 0.15;
     playerShip.rotation.x = Math.cos(t * 0.5) * 0.02;
