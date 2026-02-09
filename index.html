@@ -113,7 +113,7 @@
     <div id="ui-container">
         <div id="score-panel" class="hud-panel">Score : <span id="score">0</span></div>
         <div id="question-panel" class="hud-panel">2 x 2 = ?</div>
-        <div id="camera-panel" class="hud-panel">Caméra : 3/4 Arrière (Touche C)</div>
+        <div id="camera-panel" class="hud-panel">Caméra : Arrière Haute (Touche C)</div>
         <div id="controls-hint" class="hud-panel">
             ⬆️ Avancer | ⬅️➡️ Tourner | <b>ESPACE</b> Tirer | <b>C</b> Changer de vue
         </div>
@@ -163,14 +163,14 @@
         
         // Contrôles et Physique
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Space: false };
-        const playerStats = { speed: 0, rot: 0, maxSpeed: 0.5, acc: 0.01, turnSpeed: 0.025 };
+        const playerStats = { speed: 0, rot: 0, maxSpeed: 0.5, acc: 0.01, turnSpeed: 0.025, radius: 5 };
         
         // Caméras
         let cameraIndex = 0;
         const cameraModes = [
-            { name: "3/4 Arrière", offset: new THREE.Vector3(0, 15, -30), lookAt: new THREE.Vector3(0, 5, 20) },
+            { name: "Arrière Haute", offset: new THREE.Vector3(0, 25, -35), lookAt: new THREE.Vector3(0, 5, 10) },
             { name: "Aérienne", offset: new THREE.Vector3(0, 70, -10), lookAt: new THREE.Vector3(0, 0, 10) },
-            { name: "Devant (Capitaine)", offset: new THREE.Vector3(0, 4, 10), lookAt: new THREE.Vector3(0, 2, 40) }
+            { name: "Proue (Capitaine)", offset: new THREE.Vector3(0, 4, 10), lookAt: new THREE.Vector3(0, 2, 40) }
         ];
 
         /* =========================================
@@ -180,7 +180,7 @@
         function init() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x38bdf8);
-            scene.fog = new THREE.Fog(0x38bdf8, 50, 300);
+            scene.fog = new THREE.Fog(0x38bdf8, 50, 400);
 
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 
@@ -189,19 +189,21 @@
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             scene.add(ambientLight);
 
-            const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            const sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
             sunLight.position.set(100, 100, 50);
             sunLight.castShadow = true;
-            sunLight.shadow.camera.left = -100;
-            sunLight.shadow.camera.right = 100;
-            sunLight.shadow.camera.top = 100;
-            sunLight.shadow.camera.bottom = -100;
+            sunLight.shadow.camera.left = -200;
+            sunLight.shadow.camera.right = 200;
+            sunLight.shadow.camera.top = 200;
+            sunLight.shadow.camera.bottom = -200;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
             scene.add(sunLight);
 
-            const waterGeo = new THREE.PlaneGeometry(2000, 2000);
+            const waterGeo = new THREE.PlaneGeometry(3000, 3000);
             const waterMat = new THREE.MeshPhongMaterial({ color: 0x0ea5e9, shininess: 80, transparent: true, opacity: 0.9 });
             const water = new THREE.Mesh(waterGeo, waterMat);
             water.rotation.x = -Math.PI / 2;
@@ -227,31 +229,28 @@
 
             const mtlLoader = new THREE.MTLLoader(manager);
             const objLoader = new THREE.OBJLoader(manager);
+            
+            // Correction pour les chemins de textures
+            mtlLoader.setPath(ASSETS_PATH);
+            objLoader.setPath(ASSETS_PATH);
 
-            // Vérification si on est en environnement Blob/Preview où les fichiers externes échouent
             const isBlobEnv = window.location.protocol === 'blob:' || window.location.protocol === 'about:';
 
             if (isBlobEnv) {
-                console.warn("Mode Preview détecté : Chargement des fichiers externes désactivé pour éviter les erreurs. Utilisation de placeholders.");
+                console.warn("Mode Preview : Placeholders activés.");
                 document.getElementById('loading-text').innerText = "Mode Aperçu : Utilisation de modèles simplifiés...";
-                
-                // Générer immédiatement les placeholders
                 for (const key of Object.keys(MODELS)) {
                     loadedAssets[key] = createPlaceholder(key);
                 }
-                // Déclencher manuellement la fin du chargement car le manager ne surveille rien
-                setTimeout(() => {
-                    manager.onLoad();
-                }, 1000);
+                setTimeout(() => manager.onLoad(), 800);
                 return;
             }
 
-            // Chargement normal (GitHub / Serveur Local)
             for (const [key, files] of Object.entries(MODELS)) {
-                mtlLoader.load(ASSETS_PATH + files.mtl, (materials) => {
+                mtlLoader.load(files.mtl, (materials) => {
                     materials.preload();
                     objLoader.setMaterials(materials);
-                    objLoader.load(ASSETS_PATH + files.obj, (object) => {
+                    objLoader.load(files.obj, (object) => {
                         object.traverse((child) => {
                             if (child.isMesh) {
                                 child.castShadow = true;
@@ -260,43 +259,38 @@
                         });
                         loadedAssets[key] = object;
                     }, undefined, (err) => {
-                        console.error("Erreur OBJ " + key, err);
-                        loadedAssets[key] = createPlaceholder(key); // Fallback si fichier manquant
+                        loadedAssets[key] = createPlaceholder(key);
                     });
                 }, undefined, (err) => {
-                    console.error("Erreur MTL " + key, err);
-                    // Essayer de charger l'OBJ même sans MTL
                     objLoader.setMaterials(null);
-                    objLoader.load(ASSETS_PATH + files.obj, (obj) => { loadedAssets[key] = obj; }, undefined, () => {
+                    objLoader.load(files.obj, (obj) => { loadedAssets[key] = obj; }, undefined, () => {
                         loadedAssets[key] = createPlaceholder(key);
                     });
                 });
             }
         }
 
-        // Création de modèles de remplacement si les fichiers manquent
         function createPlaceholder(type) {
             let geometry, material, mesh;
             if (type.includes('ship')) {
-                geometry = new THREE.BoxGeometry(2, 1, 4);
-                material = new THREE.MeshStandardMaterial({ color: type === 'player' ? 0x8b5a2b : 0xcc0000 });
+                geometry = new THREE.BoxGeometry(2, 1, 5);
+                material = new THREE.MeshStandardMaterial({ color: type === 'player' ? 0x8b5a2b : 0x444444 });
                 mesh = new THREE.Mesh(geometry, material);
-                // Petit mât
-                const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3), new THREE.MeshStandardMaterial({color:0xffffff}));
-                mast.position.y = 1.5;
+                const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4), new THREE.MeshStandardMaterial({color:0xffffff}));
+                mast.position.y = 2;
                 mesh.add(mast);
             } else if (type.includes('rock')) {
-                geometry = new THREE.DodecahedronGeometry(1);
-                material = new THREE.MeshStandardMaterial({ color: 0x888888 });
+                geometry = new THREE.DodecahedronGeometry(1.5);
+                material = new THREE.MeshStandardMaterial({ color: 0x777777 });
                 mesh = new THREE.Mesh(geometry, material);
             } else if (type.includes('cannon')) {
                 geometry = new THREE.CylinderGeometry(0.2, 0.3, 1.5);
-                material = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                material = new THREE.MeshStandardMaterial({ color: 0x222222 });
                 mesh = new THREE.Mesh(geometry, material);
                 mesh.rotation.x = Math.PI / 2;
             } else {
-                geometry = new THREE.SphereGeometry(0.2);
-                material = new THREE.MeshStandardMaterial({ color: 0x000000 });
+                geometry = new THREE.SphereGeometry(0.3);
+                material = new THREE.MeshStandardMaterial({ color: 0x111111 });
                 mesh = new THREE.Mesh(geometry, material);
             }
             return mesh;
@@ -307,32 +301,33 @@
            ========================================= */
 
         function buildWorld() {
-            // Créer le bateau du joueur
             playerShip = loadedAssets.player.clone();
             playerShip.scale.set(1.5, 1.5, 1.5);
-            if (!playerShip.geometry) playerShip.rotation.y = Math.PI; // Seulement si c'est le vrai modèle
+            if (!playerShip.geometry) playerShip.rotation.y = Math.PI; 
             
-            // Ajouter le canon
             playerCannon = loadedAssets.cannon.clone();
             playerCannon.scale.set(0.8, 0.8, 0.8);
             playerCannon.position.set(0, 1.2, 3); 
-            // Ajustement si placeholder ou modèle réel
             if(!playerCannon.geometry) playerCannon.rotation.y = Math.PI; 
             
             playerShip.add(playerCannon);
             scene.add(playerShip);
 
-            // Ajouter des rochers
             const rockKeys = ['rockA', 'rockB', 'rockC', 'rockD'];
-            for (let i = 0; i < 50; i++) {
+            for (let i = 0; i < 60; i++) {
                 const key = rockKeys[Math.floor(Math.random() * rockKeys.length)];
                 const rock = loadedAssets[key].clone();
                 const angle = Math.random() * Math.PI * 2;
-                const dist = 60 + Math.random() * 300;
+                const dist = 70 + Math.random() * 400;
                 
                 rock.position.set(Math.cos(angle) * dist, -0.5, Math.sin(angle) * dist);
-                rock.scale.setScalar(3 + Math.random() * 4);
+                const s = 4 + Math.random() * 6;
+                rock.scale.setScalar(s);
                 rock.rotation.y = Math.random() * Math.PI;
+                
+                // Données de collision (boîte simplifiée)
+                rock.userData.collisionRadius = s * 1.8; 
+                
                 scene.add(rock);
                 rocks.push(rock);
             }
@@ -367,14 +362,13 @@
 
             answers.forEach((val, i) => {
                 const enemy = loadedAssets.enemy.clone();
-                const angleOffset = (i - 1) * 0.5;
+                const angleOffset = (i - 1) * 0.4;
                 const spawnAngle = playerShip.rotation.y + Math.PI + angleOffset; 
-                const dist = 50;
+                const dist = 60;
                 
                 enemy.position.x = playerShip.position.x + Math.sin(spawnAngle) * dist;
                 enemy.position.z = playerShip.position.z + Math.cos(spawnAngle) * dist;
                 
-                // Si c'est un placeholder (BoxGeometry), pas besoin de rotation PI
                 if (!enemy.geometry) enemy.rotation.y = spawnAngle + Math.PI; 
                 else enemy.lookAt(playerShip.position);
 
@@ -392,36 +386,51 @@
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = 256; canvas.height = 128;
-            ctx.fillStyle = "rgba(0,0,0,0.7)";
-            ctx.fillRect(28, 20, 200, 88);
+            ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+            ctx.fillRect(10, 10, 236, 108);
             ctx.strokeStyle = "#fbbf24";
-            ctx.lineWidth = 5;
-            ctx.strokeRect(28, 20, 200, 88);
-            ctx.font = "Bold 80px Arial";
+            ctx.lineWidth = 8;
+            ctx.strokeRect(10, 10, 236, 108);
+            ctx.font = "Bold 85px Arial";
             ctx.fillStyle = "white";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(text, 128, 64);
             const texture = new THREE.CanvasTexture(canvas);
             const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
-            sprite.scale.set(10, 5, 1);
+            sprite.scale.set(12, 6, 1);
             return sprite;
         }
 
         function fireCannon() {
             const ball = loadedAssets.ball.clone();
-            ball.scale.set(3,3,3);
-            const startPos = new THREE.Vector3(0, 2, 4).applyMatrix4(playerShip.matrixWorld);
+            ball.scale.set(4, 4, 4);
+            const startPos = new THREE.Vector3(0, 2, 5).applyMatrix4(playerShip.matrixWorld);
             ball.position.copy(startPos);
-            const velocity = new THREE.Vector3(0, 0, 1).applyQuaternion(playerShip.quaternion).multiplyScalar(1.5);
-            ball.userData = { velocity: velocity, life: 100 };
+            const velocity = new THREE.Vector3(0, 0, 1.8).applyQuaternion(playerShip.quaternion);
+            ball.userData = { velocity: velocity, life: 120 };
             scene.add(ball);
             projectiles.push(ball);
+        }
+
+        function checkIslandCollisions() {
+            for (let rock of rocks) {
+                const dist = playerShip.position.distanceTo(rock.position);
+                if (dist < rock.userData.collisionRadius + playerStats.radius) {
+                    // Collision détectée : Repousser le bateau
+                    const dir = new THREE.Vector3().subVectors(playerShip.position, rock.position).normalize();
+                    playerShip.position.add(dir.multiplyScalar(0.5));
+                    playerStats.speed *= -0.5; // Inverser et ralentir
+                    return true;
+                }
+            }
+            return false;
         }
 
         function update() {
             if (!playerShip) return;
 
+            // Contrôles
             if (keys.ArrowUp) playerStats.speed += playerStats.acc;
             if (keys.ArrowDown) playerStats.speed -= playerStats.acc;
             playerStats.speed *= 0.98;
@@ -430,12 +439,19 @@
             if (keys.ArrowLeft) playerShip.rotation.y += playerStats.turnSpeed;
             if (keys.ArrowRight) playerShip.rotation.y -= playerStats.turnSpeed;
 
+            // Mouvement
             playerShip.translateZ(playerStats.speed);
+            
+            // Vérification des collisions avec les îles
+            checkIslandCollisions();
 
+            // Effet de tangage
             const time = Date.now() * 0.001;
-            playerShip.position.y = Math.sin(time) * 0.2;
-            playerShip.rotation.x = Math.sin(time * 0.7) * 0.02;
+            playerShip.position.y = Math.sin(time * 1.2) * 0.15;
+            playerShip.rotation.x = Math.sin(time * 0.8) * 0.02;
+            playerShip.rotation.z = Math.cos(time * 0.5) * 0.01;
 
+            // Projectiles
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 const p = projectiles[i];
                 p.position.add(p.userData.velocity);
@@ -444,7 +460,7 @@
                 let hit = false;
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     const enemy = enemies[j];
-                    if (p.position.distanceTo(enemy.position) < 6) {
+                    if (p.position.distanceTo(enemy.position) < 8) {
                         handleCollision(enemy);
                         hit = true;
                         break;
@@ -460,11 +476,11 @@
 
         function handleCollision(enemy) {
             if (enemy.userData.correct) {
-                showFeedback("GAGNÉ ! +10", "#4ade80");
+                showFeedback("CORRECT ! +10", "#4ade80");
                 score += 10;
                 newQuestion();
             } else {
-                showFeedback("PERDU ! -5", "#ef4444");
+                showFeedback("ERREUR ! -5", "#ef4444");
                 score = Math.max(0, score - 5);
                 scene.remove(enemy);
                 enemies = enemies.filter(e => e !== enemy);
@@ -478,7 +494,7 @@
             msg.innerText = text;
             msg.style.color = color;
             msg.style.display = 'block';
-            setTimeout(() => { msg.style.display = 'none'; }, 1500);
+            setTimeout(() => { msg.style.display = 'none'; }, 1200);
         }
 
         function updateHUD() {
@@ -491,7 +507,7 @@
             if (cameraIndex !== 1) offset.applyQuaternion(playerShip.quaternion);
             
             const targetPos = playerShip.position.clone().add(offset);
-            camera.position.lerp(targetPos, 0.05);
+            camera.position.lerp(targetPos, 0.08);
             
             const lookOffset = mode.lookAt.clone();
             lookOffset.applyQuaternion(playerShip.quaternion);
