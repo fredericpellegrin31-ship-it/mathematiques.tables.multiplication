@@ -3,437 +3,529 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bataille Navale des Multiplications - CE1</title>
+    <title>La Bataille des Tables - CE1</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #0ea5e9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; overflow: hidden; background-color: #38bdf8; font-family: 'Segoe UI', Tahoma, Verdana, sans-serif; user-select: none; }
         canvas { display: block; }
-        
-        /* Menu d'accueil */
-        #home-screen {
+
+        /* --- Interface Utilisateur (HUD) --- */
+        #ui-container {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(to bottom, #0ea5e9, #075985);
+            pointer-events: none;
+            display: none;
+        }
+
+        .hud-panel {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.8);
+            border: 3px solid #fbbf24;
+            border-radius: 15px;
+            padding: 15px 25px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        #score-panel { top: 20px; left: 20px; font-size: 1.2rem; }
+        #camera-panel { top: 20px; right: 20px; font-size: 0.9rem; color: #cbd5e1; }
+        
+        #question-panel {
+            top: 20px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #fbbf24;
+            text-shadow: 2px 2px 0 #000;
+            min-width: 300px;
+        }
+
+        #controls-hint {
+            bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 1rem;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid white;
+            border-radius: 50px;
+            padding: 10px 30px;
+        }
+
+        /* --- Écrans de Menu --- */
+        #loading-screen, #start-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #0284c7, #0c4a6e);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 300;
             color: white;
-            text-align: center;
+            z-index: 100;
         }
 
-        .menu-card {
-            background: rgba(15, 23, 42, 0.8);
-            padding: 40px;
-            border-radius: 20px;
-            border: 4px solid #eab308;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-        }
-
-        .level-btn {
-            display: block;
-            width: 250px;
-            margin: 15px auto;
-            padding: 15px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: #0f172a;
-            background: #f1f5f9;
+        .btn {
+            background: #fbbf24;
+            color: #451a03;
             border: none;
-            border-radius: 10px;
+            padding: 15px 40px;
+            margin: 10px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border-radius: 12px;
             cursor: pointer;
-            transition: transform 0.2s, background 0.2s;
+            transition: transform 0.1s;
+            box-shadow: 0 6px 0 #b45309;
         }
+        .btn:hover { transform: scale(1.05); background: #fcd34d; }
+        .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #b45309; }
 
-        .level-btn:hover {
-            transform: scale(1.05);
-            background: #eab308;
-        }
-
-        /* Interface de jeu */
-        #ui {
+        #feedback-msg {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            color: white;
-            background: rgba(15, 23, 42, 0.9);
-            padding: 20px;
-            border-radius: 15px;
-            border: 3px solid #eab308;
-            pointer-events: none;
-            z-index: 10;
-            min-width: 250px;
-        }
-
-        #timer-container {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 200px;
-            height: 30px;
-            background: rgba(0,0,0,0.5);
-            border-radius: 15px;
-            border: 2px solid white;
-            overflow: hidden;
-            z-index: 10;
-        }
-
-        #timer-bar {
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(to right, #22c55e, #eab308, #ef4444);
-            transition: width 1s linear;
-        }
-
-        .math-box { font-size: 2.5rem; font-weight: bold; color: #fbbf24; margin: 10px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
-        .controls-hint { font-size: 0.8rem; color: #94a3b8; margin-top: 10px; line-height: 1.4; }
-        
-        #message { position: absolute; bottom: 25%; width: 100%; text-align: center; color: #fbbf24; font-size: 3rem; font-weight: bold; pointer-events: none; display: none; text-shadow: 3px 3px 6px #000; z-index: 20; }
-        
-        #game-over {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9);
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            z-index: 400;
+            top: 40%; width: 100%;
             text-align: center;
+            font-size: 5rem;
+            font-weight: bold;
+            text-shadow: 0 0 20px black;
+            display: none;
+            z-index: 50;
         }
     </style>
 </head>
 <body>
 
-<div id="home-screen">
-    <div class="menu-card">
-        <h1 style="font-size: 3rem; margin-bottom: 10px;">Bataille Navale</h1>
-        <p style="font-size: 1.2rem; margin-bottom: 30px; color: #cbd5e1;">Apprends tes tables en haute mer !</p>
-        <button class="level-btn" onclick="startGame(2, 5)">DÉBUTANT (Tables 2 à 5)</button>
-        <button class="level-btn" onclick="startGame(2, 10)">MOUSSAILLON (Tables 2 à 10)</button>
-        <button class="level-btn" onclick="startGame(11, 15)">CAPITAINE (Tables 11 à 15)</button>
+    <!-- Écran de chargement -->
+    <div id="loading-screen">
+        <h1>Chargement...</h1>
+        <p id="loading-text">Préparation des navires...</p>
     </div>
-</div>
 
-<div id="ui" style="display:none;">
-    <h2 style="margin:0; font-size: 1.2rem; color: #eab308;">Capitaine !</h2>
-    <div id="math-question" class="math-box">...</div>
-    <p style="margin: 5px 0; font-size: 1.2rem;">Score : <span id="score" style="color:#22c55e">0</span></p>
-    <div class="controls-hint">
-        Z,Q,S,D : Naviguer | <b>ESPACE : Tirer</b><br>
-        <b>C : Changer de vue</b> (actuelle: <span id="view-name">Classique</span>)
+    <!-- Menu Principal -->
+    <div id="start-screen" style="display:none;">
+        <h1 style="font-size: 4rem; color: #fbbf24; text-shadow: 4px 4px 0 #000; margin-bottom: 10px;">La Bataille des Tables</h1>
+        <p style="font-size: 1.5rem; margin-bottom: 40px;">Capitaine, préparez-vous à calculer !</p>
+        <div>
+            <button class="btn" onclick="startGame(2, 5)">Niveau CE1 (x2 à x5)</button>
+            <button class="btn" onclick="startGame(2, 10)">Niveau Expert (x2 à x10)</button>
+        </div>
     </div>
-</div>
 
-<div id="timer-container" style="display:none;"><div id="timer-bar"></div></div>
-<div id="message">BIEN JOUÉ !</div>
+    <!-- HUD Jeu -->
+    <div id="ui-container">
+        <div id="score-panel" class="hud-panel">Score : <span id="score">0</span></div>
+        <div id="question-panel" class="hud-panel">2 x 2 = ?</div>
+        <div id="camera-panel" class="hud-panel">Caméra : 3/4 Arrière (Touche C)</div>
+        <div id="controls-hint" class="hud-panel">
+            ⬆️ Avancer | ⬅️➡️ Tourner | <b>ESPACE</b> Tirer | <b>C</b> Changer de vue
+        </div>
+        <div id="feedback-msg">BRAVO !</div>
+    </div>
 
-<div id="game-over">
-    <h1 style="font-size: 4rem; color: #eab308;">Temps écoulé !</h1>
-    <p style="font-size: 2rem;">Votre score final : <span id="final-score">0</span></p>
-    <button class="level-btn" onclick="location.reload()" style="background:#eab308">RETOUR AU MENU</button>
-</div>
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/MTLLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/OBJLoader.js"></script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/MTLLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/OBJLoader.js"></script>
-
-<script>
-/**
- * ÉTAT ET CONFIGURATION
- */
-let scene, camera, renderer, playerShip;
-let score = 0;
-let timeLeft = 120;
-let isGameOver = false;
-let currentQuestion = { a: 0, b: 0, answer: 0 };
-let levelConfig = { min: 2, max: 10 };
-const loadedModels = {};
-const enemies = [];
-const rocks = [];
-const cannonBalls = [];
-const keys = {};
-
-// Caméras
-let currentViewIndex = 0;
-const views = ["Classique", "Proue", "Aérienne"];
-
-const moveState = { speed: 0, rotation: 0, maxSpeed: 0.35, acceleration: 0.015, friction: 0.97 };
-
-function init() {
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87ceeb);
-    scene.fog = new THREE.Fog(0x87ceeb, 20, 400);
-
-    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
-    document.body.appendChild(renderer.domElement);
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.6);
-    sun.position.set(100, 100, 50);
-    scene.add(sun);
-
-    const oceanGeo = new THREE.PlaneGeometry(5000, 5000);
-    const oceanMat = new THREE.MeshPhongMaterial({ color: 0x0ea5e9, shininess: 90, transparent: true, opacity: 0.9 });
-    const ocean = new THREE.Mesh(oceanGeo, oceanMat);
-    ocean.rotation.x = -Math.PI / 2;
-    scene.add(ocean);
-
-    window.addEventListener('keydown', (e) => {
-        keys[e.code] = true;
-        if(e.code === 'Space' && !isGameOver) fireCannon();
-        if(e.code === 'KeyC') toggleView();
-    });
-    window.addEventListener('keyup', (e) => keys[e.code] = false);
-
-    loadAssets();
-}
-
-function startGame(min, max) {
-    levelConfig = { min, max };
-    document.getElementById('home-screen').style.display = 'none';
-    document.getElementById('ui').style.display = 'block';
-    document.getElementById('timer-container').style.display = 'block';
-    setupWorld();
-}
-
-async function loadAssets() {
-    const objLoader = new THREE.OBJLoader();
-    const mtlLoader = new THREE.MTLLoader();
-
-    // Configuration des fichiers correspondants aux ressources montées
-    const modelsToLoad = {
-        ship: { obj: 'ship-medium.obj', mtl: 'ship-medium.mtl' },
-        rock: { obj: 'rocks-a.obj', mtl: 'rocks-a.mtl' },
-        ball: { obj: 'cannon-ball.obj', mtl: 'cannon-ball.mtl' }
-    };
-
-    for(const [name, paths] of Object.entries(modelsToLoad)) {
-        try {
-            // Chargement du MTL d'abord
-            const materials = await new Promise((resolve, reject) => {
-                mtlLoader.load(paths.mtl, resolve, undefined, reject);
-            });
-            materials.preload();
-            
-            // Liaison des matériaux à l'OBJ loader
-            objLoader.setMaterials(materials);
-            
-            // Chargement de l'OBJ avec ses matériaux liés
-            const object = await new Promise((resolve, reject) => {
-                objLoader.load(paths.obj, resolve, undefined, reject);
-            });
-            
-            loadedModels[name] = object;
-        } catch(e) {
-            console.warn(`Erreur de chargement pour ${name}, utilisation d'un mesh par défaut`, e);
-            loadedModels[name] = new THREE.Mesh(
-                new THREE.BoxGeometry(2,2,2), 
-                new THREE.MeshStandardMaterial({color: name === 'ball' ? 0x333333 : 0x666666})
-            );
-        }
-    }
-}
-
-function setupWorld() {
-    if (!loadedModels.ship) return;
-
-    playerShip = loadedModels.ship.clone();
-    scene.add(playerShip);
-
-    for(let i=0; i<70; i++) {
-        const r = loadedModels.rock.clone();
-        const dist = 70 + Math.random() * 300;
-        const ang = Math.random() * Math.PI * 2;
-        r.position.set(Math.cos(ang)*dist, -0.5, Math.sin(ang)*dist);
-        r.scale.setScalar(2 + Math.random() * 5);
-        r.userData.collisionRadius = r.scale.x * 1.8;
-        scene.add(r);
-        rocks.push(r);
-    }
-
-    startTimer();
-    generateQuestion();
-    animate();
-}
-
-function toggleView() {
-    currentViewIndex = (currentViewIndex + 1) % views.length;
-    document.getElementById('view-name').innerText = views[currentViewIndex];
-}
-
-function startTimer() {
-    const timerBar = document.getElementById('timer-bar');
-    const interval = setInterval(() => {
-        if (isGameOver) { clearInterval(interval); return; }
-        timeLeft--;
-        timerBar.style.width = (timeLeft / 120 * 100) + "%";
-        if (timeLeft <= 0) {
-            isGameOver = true;
-            document.getElementById('game-over').style.display = 'flex';
-            document.getElementById('final-score').innerText = score;
-            clearInterval(interval);
-        }
-    }, 1000);
-}
-
-function generateQuestion() {
-    currentQuestion.a = Math.floor(Math.random() * (levelConfig.max - levelConfig.min + 1)) + levelConfig.min;
-    currentQuestion.b = Math.floor(Math.random() * 10) + 1;
-    currentQuestion.answer = currentQuestion.a * currentQuestion.b;
-    document.getElementById('math-question').innerText = `${currentQuestion.a} x ${currentQuestion.b} = ?`;
-    spawnEnemies();
-}
-
-function spawnEnemies() {
-    enemies.forEach(e => scene.remove(e));
-    enemies.length = 0;
-
-    const answers = [currentQuestion.answer];
-    while(answers.length < 3) {
-        let wrong = currentQuestion.answer + (Math.random() < 0.5 ? -1 : 1) * (Math.floor(Math.random() * 5) + 1);
-        if (wrong > 0 && !answers.includes(wrong)) answers.push(wrong);
-    }
-    answers.sort(() => Math.random() - 0.5);
-
-    answers.forEach((val, i) => {
-        const ship = loadedModels.ship.clone();
-        const angle = (Math.PI * 2 / 3) * i + (playerShip.rotation.y) + 0.5;
-        const dist = 60 + Math.random() * 10;
-        ship.position.set(playerShip.position.x + Math.sin(angle)*dist, 0, playerShip.position.z + Math.cos(angle)*dist);
-        ship.userData = { value: val, isCorrect: val === currentQuestion.answer };
+    <script>
+        /* =========================================
+           CONFIGURATION & ÉTAT DU JEU
+           ========================================= */
         
-        const sprite = createTextSprite(val.toString());
-        sprite.position.y = 12; // Nombres surélevés
-        ship.add(sprite);
-
-        scene.add(ship);
-        enemies.push(ship);
-    });
-}
-
-function createTextSprite(text) {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 256; canvas.height = 128;
-    ctx.fillStyle = '#fbbf24';
-    ctx.font = 'Bold 110px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(text, 128, 100);
-    const texture = new THREE.CanvasTexture(canvas);
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
-    sprite.scale.set(14, 7, 1);
-    return sprite;
-}
-
-function fireCannon() {
-    const ball = loadedModels.ball.clone();
-    ball.position.copy(playerShip.position).add(new THREE.Vector3(0, 2, 0));
-    const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(playerShip.quaternion);
-    ball.userData = { velocity: dir.multiplyScalar(1.5), life: 120 };
-    scene.add(ball);
-    cannonBalls.push(ball);
-    moveState.speed -= 0.05; 
-}
-
-function updateProjectiles() {
-    for (let i = cannonBalls.length - 1; i >= 0; i--) {
-        const b = cannonBalls[i];
-        b.position.add(b.userData.velocity);
-        b.userData.life--;
+        const ASSETS_PATH = './'; 
         
-        for (let j = enemies.length - 1; j >= 0; j--) {
-            if (b.position.distanceTo(enemies[j].position) < 7) {
-                checkImpact(enemies[j], j);
-                scene.remove(b);
-                cannonBalls.splice(i, 1);
+        // Liste des fichiers à charger
+        const MODELS = {
+            player: { obj: 'ship-medium.obj', mtl: 'ship-medium.mtl' },
+            enemy:  { obj: 'ship-pirate-medium.obj', mtl: 'ship-pirate-medium.mtl' },
+            cannon: { obj: 'cannon.obj', mtl: 'cannon.mtl' },
+            ball:   { obj: 'cannon-ball.obj', mtl: 'cannon-ball.mtl' },
+            rockA:  { obj: 'rocks-a.obj', mtl: 'rocks-a.mtl' },
+            rockB:  { obj: 'rocks-b.obj', mtl: 'rocks-b.mtl' },
+            rockC:  { obj: 'rocks-sand-b.obj', mtl: 'rocks-sand-b.mtl' },
+            rockD:  { obj: 'rocks-sand-c.obj', mtl: 'rocks-sand-c.mtl' }
+        };
+
+        // Variables Three.js
+        let scene, camera, renderer;
+        let loadedAssets = {}; 
+        let manager;
+        
+        // Entités du jeu
+        let playerShip, playerCannon;
+        let enemies = [];
+        let projectiles = [];
+        let rocks = [];
+        
+        // Variables de jeu
+        let score = 0;
+        let minTable = 2;
+        let maxTable = 5;
+        let currentQuestion = { a: 0, b: 0, ans: 0 };
+        
+        // Contrôles et Physique
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Space: false };
+        const playerStats = { speed: 0, rot: 0, maxSpeed: 0.5, acc: 0.01, turnSpeed: 0.025 };
+        
+        // Caméras
+        let cameraIndex = 0;
+        const cameraModes = [
+            { name: "3/4 Arrière", offset: new THREE.Vector3(0, 15, -30), lookAt: new THREE.Vector3(0, 5, 20) },
+            { name: "Aérienne", offset: new THREE.Vector3(0, 70, -10), lookAt: new THREE.Vector3(0, 0, 10) },
+            { name: "Devant (Capitaine)", offset: new THREE.Vector3(0, 4, 10), lookAt: new THREE.Vector3(0, 2, 40) }
+        ];
+
+        /* =========================================
+           INITIALISATION & CHARGEMENT
+           ========================================= */
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x38bdf8);
+            scene.fog = new THREE.Fog(0x38bdf8, 50, 300);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            sunLight.position.set(100, 100, 50);
+            sunLight.castShadow = true;
+            sunLight.shadow.camera.left = -100;
+            sunLight.shadow.camera.right = 100;
+            sunLight.shadow.camera.top = 100;
+            sunLight.shadow.camera.bottom = -100;
+            scene.add(sunLight);
+
+            const waterGeo = new THREE.PlaneGeometry(2000, 2000);
+            const waterMat = new THREE.MeshPhongMaterial({ color: 0x0ea5e9, shininess: 80, transparent: true, opacity: 0.9 });
+            const water = new THREE.Mesh(waterGeo, waterMat);
+            water.rotation.x = -Math.PI / 2;
+            water.receiveShadow = true;
+            scene.add(water);
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+
+            loadAllAssets();
+        }
+
+        function loadAllAssets() {
+            manager = new THREE.LoadingManager();
+            
+            manager.onLoad = () => {
+                document.getElementById('loading-screen').style.display = 'none';
+                document.getElementById('start-screen').style.display = 'flex';
+                buildWorld();
+                animate();
+            };
+
+            const mtlLoader = new THREE.MTLLoader(manager);
+            const objLoader = new THREE.OBJLoader(manager);
+
+            // Vérification si on est en environnement Blob/Preview où les fichiers externes échouent
+            const isBlobEnv = window.location.protocol === 'blob:' || window.location.protocol === 'about:';
+
+            if (isBlobEnv) {
+                console.warn("Mode Preview détecté : Chargement des fichiers externes désactivé pour éviter les erreurs. Utilisation de placeholders.");
+                document.getElementById('loading-text').innerText = "Mode Aperçu : Utilisation de modèles simplifiés...";
+                
+                // Générer immédiatement les placeholders
+                for (const key of Object.keys(MODELS)) {
+                    loadedAssets[key] = createPlaceholder(key);
+                }
+                // Déclencher manuellement la fin du chargement car le manager ne surveille rien
+                setTimeout(() => {
+                    manager.onLoad();
+                }, 1000);
                 return;
             }
+
+            // Chargement normal (GitHub / Serveur Local)
+            for (const [key, files] of Object.entries(MODELS)) {
+                mtlLoader.load(ASSETS_PATH + files.mtl, (materials) => {
+                    materials.preload();
+                    objLoader.setMaterials(materials);
+                    objLoader.load(ASSETS_PATH + files.obj, (object) => {
+                        object.traverse((child) => {
+                            if (child.isMesh) {
+                                child.castShadow = true;
+                                child.receiveShadow = true;
+                            }
+                        });
+                        loadedAssets[key] = object;
+                    }, undefined, (err) => {
+                        console.error("Erreur OBJ " + key, err);
+                        loadedAssets[key] = createPlaceholder(key); // Fallback si fichier manquant
+                    });
+                }, undefined, (err) => {
+                    console.error("Erreur MTL " + key, err);
+                    // Essayer de charger l'OBJ même sans MTL
+                    objLoader.setMaterials(null);
+                    objLoader.load(ASSETS_PATH + files.obj, (obj) => { loadedAssets[key] = obj; }, undefined, () => {
+                        loadedAssets[key] = createPlaceholder(key);
+                    });
+                });
+            }
         }
-        if (b.userData.life <= 0) { scene.remove(b); cannonBalls.splice(i, 1); }
-    }
-}
 
-function checkImpact(enemy, idx) {
-    if (enemy.userData.isCorrect) {
-        score += 10;
-        document.getElementById('score').innerText = score;
-        showMessage("EXCELLENT ! +10");
-        generateQuestion();
-    } else {
-        score = Math.max(0, score - 5);
-        document.getElementById('score').innerText = score;
-        showMessage("ERREUR ! -5", "#ef4444");
-        scene.remove(enemy);
-        enemies.splice(idx, 1);
-        if(enemies.length === 0) generateQuestion();
-    }
-}
-
-function animate() {
-    if (isGameOver) return;
-    requestAnimationFrame(animate);
-
-    if (keys['KeyW'] || keys['ArrowUp']) moveState.speed += moveState.acceleration;
-    if (keys['KeyS'] || keys['ArrowDown']) moveState.speed -= moveState.acceleration;
-    if (keys['KeyA'] || keys['ArrowLeft']) playerShip.rotation.y += 0.035;
-    if (keys['KeyD'] || keys['ArrowRight']) playerShip.rotation.y -= 0.035;
-
-    moveState.speed *= moveState.friction;
-    const oldPos = playerShip.position.clone();
-    playerShip.translateZ(moveState.speed);
-
-    for(const r of rocks) {
-        if(playerShip.position.distanceTo(r.position) < r.userData.collisionRadius) {
-            playerShip.position.copy(oldPos);
-            moveState.speed = -moveState.speed * 0.4;
-            break;
+        // Création de modèles de remplacement si les fichiers manquent
+        function createPlaceholder(type) {
+            let geometry, material, mesh;
+            if (type.includes('ship')) {
+                geometry = new THREE.BoxGeometry(2, 1, 4);
+                material = new THREE.MeshStandardMaterial({ color: type === 'player' ? 0x8b5a2b : 0xcc0000 });
+                mesh = new THREE.Mesh(geometry, material);
+                // Petit mât
+                const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3), new THREE.MeshStandardMaterial({color:0xffffff}));
+                mast.position.y = 1.5;
+                mesh.add(mast);
+            } else if (type.includes('rock')) {
+                geometry = new THREE.DodecahedronGeometry(1);
+                material = new THREE.MeshStandardMaterial({ color: 0x888888 });
+                mesh = new THREE.Mesh(geometry, material);
+            } else if (type.includes('cannon')) {
+                geometry = new THREE.CylinderGeometry(0.2, 0.3, 1.5);
+                material = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                mesh = new THREE.Mesh(geometry, material);
+                mesh.rotation.x = Math.PI / 2;
+            } else {
+                geometry = new THREE.SphereGeometry(0.2);
+                material = new THREE.MeshStandardMaterial({ color: 0x000000 });
+                mesh = new THREE.Mesh(geometry, material);
+            }
+            return mesh;
         }
-    }
 
-    let targetCamPos = new THREE.Vector3();
-    let lookAtPos = playerShip.position.clone().add(new THREE.Vector3(0, 2, 0));
+        /* =========================================
+           LOGIQUE DU JEU
+           ========================================= */
 
-    if (views[currentViewIndex] === "Classique") {
-        targetCamPos.copy(new THREE.Vector3(0, 18, -35)).applyMatrix4(playerShip.matrixWorld);
-    } else if (views[currentViewIndex] === "Proue") {
-        targetCamPos.copy(new THREE.Vector3(0, 4, 8)).applyMatrix4(playerShip.matrixWorld);
-        lookAtPos.add(new THREE.Vector3(0, 0, 20).applyQuaternion(playerShip.quaternion));
-    } else if (views[currentViewIndex] === "Aérienne") {
-        targetCamPos.copy(playerShip.position).add(new THREE.Vector3(0, 80, -20));
-    }
+        function buildWorld() {
+            // Créer le bateau du joueur
+            playerShip = loadedAssets.player.clone();
+            playerShip.scale.set(1.5, 1.5, 1.5);
+            if (!playerShip.geometry) playerShip.rotation.y = Math.PI; // Seulement si c'est le vrai modèle
+            
+            // Ajouter le canon
+            playerCannon = loadedAssets.cannon.clone();
+            playerCannon.scale.set(0.8, 0.8, 0.8);
+            playerCannon.position.set(0, 1.2, 3); 
+            // Ajustement si placeholder ou modèle réel
+            if(!playerCannon.geometry) playerCannon.rotation.y = Math.PI; 
+            
+            playerShip.add(playerCannon);
+            scene.add(playerShip);
 
-    camera.position.lerp(targetCamPos, 0.1);
-    camera.lookAt(lookAtPos);
+            // Ajouter des rochers
+            const rockKeys = ['rockA', 'rockB', 'rockC', 'rockD'];
+            for (let i = 0; i < 50; i++) {
+                const key = rockKeys[Math.floor(Math.random() * rockKeys.length)];
+                const rock = loadedAssets[key].clone();
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 60 + Math.random() * 300;
+                
+                rock.position.set(Math.cos(angle) * dist, -0.5, Math.sin(angle) * dist);
+                rock.scale.setScalar(3 + Math.random() * 4);
+                rock.rotation.y = Math.random() * Math.PI;
+                scene.add(rock);
+                rocks.push(rock);
+            }
+        }
 
-    updateProjectiles();
+        function startGame(min, max) {
+            minTable = min;
+            maxTable = max;
+            score = 0;
+            updateHUD();
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('ui-container').style.display = 'block';
+            newQuestion();
+        }
 
-    const t = Date.now() * 0.002;
-    playerShip.position.y = Math.sin(t) * 0.15;
-    playerShip.rotation.x = Math.cos(t * 0.5) * 0.02;
+        function newQuestion() {
+            enemies.forEach(e => scene.remove(e));
+            enemies = [];
 
-    renderer.render(scene, camera);
-}
+            currentQuestion.a = Math.floor(Math.random() * (maxTable - minTable + 1)) + minTable;
+            currentQuestion.b = Math.floor(Math.random() * 9) + 2;
+            currentQuestion.ans = currentQuestion.a * currentQuestion.b;
 
-function showMessage(txt, color = "#fbbf24") {
-    const el = document.getElementById('message');
-    el.innerText = txt; el.style.color = color; el.style.display = 'block';
-    setTimeout(() => el.style.display = 'none', 1500);
-}
+            document.getElementById('question-panel').innerText = `${currentQuestion.a} x ${currentQuestion.b} = ?`;
 
-window.onresize = () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-};
+            let answers = [currentQuestion.ans];
+            while (answers.length < 3) {
+                let fake = currentQuestion.ans + Math.floor(Math.random() * 10) - 5;
+                if (fake > 0 && !answers.includes(fake)) answers.push(fake);
+            }
+            answers.sort(() => Math.random() - 0.5);
 
-window.onload = init;
-</script>
+            answers.forEach((val, i) => {
+                const enemy = loadedAssets.enemy.clone();
+                const angleOffset = (i - 1) * 0.5;
+                const spawnAngle = playerShip.rotation.y + Math.PI + angleOffset; 
+                const dist = 50;
+                
+                enemy.position.x = playerShip.position.x + Math.sin(spawnAngle) * dist;
+                enemy.position.z = playerShip.position.z + Math.cos(spawnAngle) * dist;
+                
+                // Si c'est un placeholder (BoxGeometry), pas besoin de rotation PI
+                if (!enemy.geometry) enemy.rotation.y = spawnAngle + Math.PI; 
+                else enemy.lookAt(playerShip.position);
+
+                const sprite = createTextSprite(val.toString());
+                sprite.position.set(0, 8, 0);
+                enemy.add(sprite);
+
+                enemy.userData = { value: val, correct: (val === currentQuestion.ans) };
+                scene.add(enemy);
+                enemies.push(enemy);
+            });
+        }
+
+        function createTextSprite(text) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 256; canvas.height = 128;
+            ctx.fillStyle = "rgba(0,0,0,0.7)";
+            ctx.fillRect(28, 20, 200, 88);
+            ctx.strokeStyle = "#fbbf24";
+            ctx.lineWidth = 5;
+            ctx.strokeRect(28, 20, 200, 88);
+            ctx.font = "Bold 80px Arial";
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, 128, 64);
+            const texture = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
+            sprite.scale.set(10, 5, 1);
+            return sprite;
+        }
+
+        function fireCannon() {
+            const ball = loadedAssets.ball.clone();
+            ball.scale.set(3,3,3);
+            const startPos = new THREE.Vector3(0, 2, 4).applyMatrix4(playerShip.matrixWorld);
+            ball.position.copy(startPos);
+            const velocity = new THREE.Vector3(0, 0, 1).applyQuaternion(playerShip.quaternion).multiplyScalar(1.5);
+            ball.userData = { velocity: velocity, life: 100 };
+            scene.add(ball);
+            projectiles.push(ball);
+        }
+
+        function update() {
+            if (!playerShip) return;
+
+            if (keys.ArrowUp) playerStats.speed += playerStats.acc;
+            if (keys.ArrowDown) playerStats.speed -= playerStats.acc;
+            playerStats.speed *= 0.98;
+            playerStats.speed = Math.max(Math.min(playerStats.speed, playerStats.maxSpeed), -0.2);
+
+            if (keys.ArrowLeft) playerShip.rotation.y += playerStats.turnSpeed;
+            if (keys.ArrowRight) playerShip.rotation.y -= playerStats.turnSpeed;
+
+            playerShip.translateZ(playerStats.speed);
+
+            const time = Date.now() * 0.001;
+            playerShip.position.y = Math.sin(time) * 0.2;
+            playerShip.rotation.x = Math.sin(time * 0.7) * 0.02;
+
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.position.add(p.userData.velocity);
+                p.userData.life--;
+
+                let hit = false;
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    if (p.position.distanceTo(enemy.position) < 6) {
+                        handleCollision(enemy);
+                        hit = true;
+                        break;
+                    }
+                }
+                if (hit || p.userData.life <= 0) {
+                    scene.remove(p);
+                    projectiles.splice(i, 1);
+                }
+            }
+            updateCamera();
+        }
+
+        function handleCollision(enemy) {
+            if (enemy.userData.correct) {
+                showFeedback("GAGNÉ ! +10", "#4ade80");
+                score += 10;
+                newQuestion();
+            } else {
+                showFeedback("PERDU ! -5", "#ef4444");
+                score = Math.max(0, score - 5);
+                scene.remove(enemy);
+                enemies = enemies.filter(e => e !== enemy);
+                if (enemies.length === 0) newQuestion();
+            }
+            updateHUD();
+        }
+
+        function showFeedback(text, color) {
+            const msg = document.getElementById('feedback-msg');
+            msg.innerText = text;
+            msg.style.color = color;
+            msg.style.display = 'block';
+            setTimeout(() => { msg.style.display = 'none'; }, 1500);
+        }
+
+        function updateHUD() {
+            document.getElementById('score').innerText = score;
+        }
+
+        function updateCamera() {
+            const mode = cameraModes[cameraIndex];
+            const offset = mode.offset.clone();
+            if (cameraIndex !== 1) offset.applyQuaternion(playerShip.quaternion);
+            
+            const targetPos = playerShip.position.clone().add(offset);
+            camera.position.lerp(targetPos, 0.05);
+            
+            const lookOffset = mode.lookAt.clone();
+            lookOffset.applyQuaternion(playerShip.quaternion);
+            camera.lookAt(playerShip.position.clone().add(lookOffset));
+        }
+
+        function switchCamera() {
+            cameraIndex = (cameraIndex + 1) % cameraModes.length;
+            document.getElementById('camera-panel').innerText = "Caméra : " + cameraModes[cameraIndex].name + " (Touche C)";
+        }
+
+        function onKeyDown(event) {
+            if (event.code in keys) keys[event.code] = true;
+            if (event.code === 'Space') fireCannon();
+            if (event.code === 'KeyC') switchCamera();
+        }
+
+        function onKeyUp(event) {
+            if (event.code in keys) keys[event.code] = false;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            update();
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
 </body>
 </html>
