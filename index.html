@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>La Bataille des Tables - CE1</title>
     <style>
-        /* Ciel plus clair pour différencier de la mer */
+        /* Ciel bleu clair style cartoon */
         body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: 'Segoe UI', Tahoma, Verdana, sans-serif; user-select: none; }
         canvas { display: block; }
 
@@ -32,13 +32,43 @@
         #camera-panel { top: 20px; right: 20px; font-size: 0.9rem; color: #cbd5e1; }
         
         #question-panel {
-            top: 20px; left: 50%;
+            top: 80px; /* Décalé pour laisser place au timer */
+            left: 50%;
             transform: translateX(-50%);
             font-size: 2.5rem;
             font-weight: bold;
             color: #fbbf24;
             text-shadow: 2px 2px 0 #000;
             min-width: 300px;
+        }
+
+        /* --- Barre de Temps --- */
+        #timer-container {
+            position: absolute;
+            top: 20px; left: 50%;
+            transform: translateX(-50%);
+            width: 400px;
+            height: 25px;
+            background: rgba(0,0,0,0.6);
+            border: 3px solid #fff;
+            border-radius: 20px;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        #timer-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #facc15, #fbbf24);
+            transition: width 0.2s linear;
+        }
+        #timer-text {
+            position: absolute;
+            top: 50px; left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            text-shadow: 1px 1px 2px black;
         }
 
         #controls-hint {
@@ -52,7 +82,7 @@
         }
 
         /* --- Écrans de Menu --- */
-        #loading-screen, #start-screen {
+        #loading-screen, #start-screen, #game-over-screen {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             background: linear-gradient(135deg, #0284c7, #0c4a6e);
@@ -63,6 +93,8 @@
             color: white;
             z-index: 100;
         }
+
+        #game-over-screen { display: none; z-index: 110; }
 
         .btn {
             background: #fbbf24;
@@ -98,7 +130,7 @@
             width: 40px; height: 40px;
             transform: translate(-50%, -50%);
             pointer-events: none;
-            display: none; /* Masqué par défaut */
+            display: none;
             z-index: 40;
         }
         #crosshair::before, #crosshair::after {
@@ -136,8 +168,18 @@
         </div>
     </div>
 
+    <!-- Écran Game Over -->
+    <div id="game-over-screen">
+        <h1 style="font-size: 4rem; color: #ef4444; text-shadow: 4px 4px 0 #000;">TEMPS ÉCOULÉ !</h1>
+        <p style="font-size: 2rem;">Score Final : <span id="final-score">0</span></p>
+        <button class="btn" onclick="location.reload()">Rejouer</button>
+    </div>
+
     <!-- HUD Jeu -->
     <div id="ui-container">
+        <div id="timer-container"><div id="timer-bar"></div></div>
+        <div id="timer-text">02:00</div>
+        
         <div id="score-panel" class="hud-panel">Score : <span id="score">0</span></div>
         <div id="question-panel" class="hud-panel">2 x 2 = ?</div>
         <div id="camera-panel" class="hud-panel">Caméra : Arrière Haute (Touche C)</div>
@@ -176,43 +218,45 @@
             rockD:  { obj: 'rocks-sand-c.obj', mtl: 'rocks-sand-c.mtl' }
         };
 
-        // Variables Three.js
         let scene, camera, renderer;
         let loadedAssets = {}; 
         let manager;
         let waterMesh;
-        let audioCtx; // Contexte audio
+        let audioCtx; 
         
-        // Entités du jeu
+        // Entités
         let playerShip, playerCannon;
         let enemies = [];
         let projectiles = [];
-        let particles = []; // Particules d'explosion
+        let particles = [];
         let rocks = [];
+        let foams = []; // Liste des objets écume à animer
         
-        // Variables de jeu
+        // Jeu
         let score = 0;
         let minTable = 2;
         let maxTable = 5;
         let currentQuestion = { a: 0, b: 0, ans: 0 };
         
-        // Contrôles et Physique
+        // Timer
+        let gameDuration = 120; // 2 minutes en secondes
+        let timeRemaining = 120;
+        let isGameRunning = false;
+        let lastTime = 0;
+
+        // Contrôles
         const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Space: false };
         const playerStats = { speed: 0, rot: 0, maxSpeed: 0.5, acc: 0.01, turnSpeed: 0.025, radius: 5 };
         
-        // Caméras
         let cameraIndex = 0;
         const cameraModes = [
-            // Arrière
             { name: "Arrière Haute", offset: new THREE.Vector3(0, 25, -35), lookAt: new THREE.Vector3(0, 5, 10) },
-            // Aérienne (En biais mais derrière le bateau)
             { name: "Aérienne", offset: new THREE.Vector3(0, 70, -40), lookAt: new THREE.Vector3(0, 0, 20) },
-            // Proue
             { name: "Proue (Capitaine)", offset: new THREE.Vector3(0, 4, 8), lookAt: new THREE.Vector3(0, 2, 50) }
         ];
 
         /* =========================================
-           SYSTÈME AUDIO (Simple Synth)
+           AUDIO
            ========================================= */
         function initAudio() {
             try {
@@ -222,7 +266,6 @@
 
         function playSound(type) {
             if (!audioCtx) return;
-            // Reprendre le contexte s'il est suspendu (comportement navigateur)
             if (audioCtx.state === 'suspended') audioCtx.resume();
 
             const osc = audioCtx.createOscillator();
@@ -233,7 +276,6 @@
             const now = audioCtx.currentTime;
 
             if (type === 'shoot') {
-                // Son de canon : Bruit sourd descendant
                 osc.type = 'square';
                 osc.frequency.setValueAtTime(150, now);
                 osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
@@ -242,7 +284,6 @@
                 osc.start(now);
                 osc.stop(now + 0.3);
             } else if (type === 'explosion') {
-                // Son d'explosion : Bruit blanc (simulation avec dents de scie basse fréquence + modulation)
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(100, now);
                 osc.frequency.exponentialRampToValueAtTime(10, now + 0.5);
@@ -254,30 +295,26 @@
         }
 
         /* =========================================
-           PARTICULES (Explosions)
+           PARTICULES
            ========================================= */
         function spawnExplosion(position) {
             const particleCount = 20;
             const geometry = new THREE.TetrahedronGeometry(1.5, 0); 
-            // Matériaux : Orange et Rouge
             const mat1 = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
             const mat2 = new THREE.MeshBasicMaterial({ color: 0xff4400 });
 
             for (let i = 0; i < particleCount; i++) {
                 const mesh = new THREE.Mesh(geometry, Math.random() > 0.5 ? mat1 : mat2);
                 mesh.position.copy(position);
-                
-                // Dispersion aléatoire
                 mesh.position.x += (Math.random() - 0.5) * 4;
                 mesh.position.y += (Math.random() - 0.5) * 4;
                 mesh.position.z += (Math.random() - 0.5) * 4;
 
                 const velocity = new THREE.Vector3(
                     (Math.random() - 0.5) * 0.8,
-                    (Math.random()) * 0.8 + 0.2, // Vers le haut
+                    (Math.random()) * 0.8 + 0.2, 
                     (Math.random() - 0.5) * 0.8
                 );
-
                 scene.add(mesh);
                 particles.push({ mesh: mesh, velocity: velocity, life: 1.0 });
             }
@@ -290,9 +327,8 @@
                 p.mesh.position.add(p.velocity);
                 p.mesh.rotation.x += 0.1;
                 p.mesh.rotation.z += 0.1;
-                p.velocity.y -= 0.02; // Gravité
+                p.velocity.y -= 0.02; 
                 p.mesh.scale.setScalar(p.life);
-
                 if (p.life <= 0) {
                     scene.remove(p.mesh);
                     particles.splice(i, 1);
@@ -301,12 +337,47 @@
         }
 
         /* =========================================
-           INITIALISATION & CHARGEMENT
+           ECUME & EAU (Style Wind Waker)
+           ========================================= */
+        
+        function addFoam(object, scale = 1.0) {
+            // Création d'un anneau blanc simple (low poly)
+            const geometry = new THREE.RingGeometry(scale, scale + 1.5, 7); // 7 segments pour un style un peu "cassé"
+            const material = new THREE.MeshBasicMaterial({ 
+                color: 0xffffff, 
+                transparent: true, 
+                opacity: 0.6, 
+                side: THREE.DoubleSide 
+            });
+            const foam = new THREE.Mesh(geometry, material);
+            foam.rotation.x = -Math.PI / 2;
+            foam.position.y = 0.2; // Juste au dessus de l'eau
+            
+            // Stockage pour l'animation
+            foam.userData = { 
+                baseScale: 1, 
+                pulseSpeed: 2 + Math.random(), 
+                pulseOffset: Math.random() * 10 
+            };
+            
+            object.add(foam);
+            foams.push(foam);
+        }
+
+        function updateFoam(time) {
+            foams.forEach(foam => {
+                const s = 1 + Math.sin(time * foam.userData.pulseSpeed + foam.userData.pulseOffset) * 0.15;
+                foam.scale.set(s, s, 1);
+                foam.rotation.z += 0.005; // Rotation lente
+            });
+        }
+
+        /* =========================================
+           INITIALISATION
            ========================================= */
 
         function init() {
             scene = new THREE.Scene();
-            // Couleur du ciel plus claire pour contraste avec la mer
             scene.background = new THREE.Color(0x87CEEB); 
             scene.fog = new THREE.Fog(0x87CEEB, 80, 450);
 
@@ -331,17 +402,21 @@
             sunLight.shadow.mapSize.height = 2048;
             scene.add(sunLight);
 
-            // --- EAU AMÉLIORÉE (Stable mais vivante) ---
+            // --- EAU WIND WAKER (Couleurs vertex) ---
             const waterGeo = new THREE.PlaneGeometry(3000, 3000, 64, 64); 
+            
+            // Ajouter des couleurs par sommet pour l'effet bicolore
+            const count = waterGeo.attributes.position.count;
+            waterGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+            
             const waterMat = new THREE.MeshPhongMaterial({ 
-                color: 0x0077be, // Bleu mer profond
-                emissive: 0x001133,
-                specular: 0x111111,
+                vertexColors: true, // IMPORTANT: Active les couleurs par sommet
                 shininess: 60, 
-                transparent: true, 
-                opacity: 0.9,
-                flatShading: true 
+                flatShading: true,
+                transparent: true,
+                opacity: 0.9
             });
+            
             waterMesh = new THREE.Mesh(waterGeo, waterMat);
             waterMesh.rotation.x = -Math.PI / 2;
             waterMesh.receiveShadow = true;
@@ -350,7 +425,7 @@
             window.addEventListener('resize', onWindowResize, false);
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
-            document.addEventListener('click', () => { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); }); // Démarrer audio au clic
+            document.addEventListener('click', () => { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); });
 
             initAudio();
             loadAllAssets();
@@ -358,17 +433,15 @@
 
         function loadAllAssets() {
             manager = new THREE.LoadingManager();
-            
             manager.onLoad = () => {
                 document.getElementById('loading-screen').style.display = 'none';
                 document.getElementById('start-screen').style.display = 'flex';
                 buildWorld();
-                animate();
+                requestAnimationFrame(animate);
             };
 
             const mtlLoader = new THREE.MTLLoader(manager);
             const objLoader = new THREE.OBJLoader(manager);
-            
             mtlLoader.setPath(ASSETS_PATH);
             objLoader.setPath(ASSETS_PATH);
 
@@ -443,6 +516,9 @@
             playerShip.scale.set(1.5, 1.5, 1.5);
             if (!playerShip.geometry) playerShip.rotation.y = Math.PI; 
             
+            // Écume pour le joueur
+            addFoam(playerShip, 2.5);
+
             playerCannon = loadedAssets.cannon.clone();
             playerCannon.scale.set(0.8, 0.8, 0.8);
             playerCannon.position.set(0, 1.2, 3); 
@@ -462,9 +538,11 @@
                 const s = 4 + Math.random() * 6;
                 rock.scale.setScalar(s);
                 rock.rotation.y = Math.random() * Math.PI;
-                
                 rock.userData.collisionRadius = s * 1.8; 
                 
+                // Écume pour les rochers
+                addFoam(rock, s * 0.8);
+
                 scene.add(rock);
                 rocks.push(rock);
             }
@@ -475,15 +553,38 @@
             minTable = min;
             maxTable = max;
             score = 0;
+            timeRemaining = gameDuration;
+            isGameRunning = true;
+            
             updateHUD();
             document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('game-over-screen').style.display = 'none';
             document.getElementById('ui-container').style.display = 'block';
+            
+            // Reset position joueur
+            playerShip.position.set(0,0,0);
+            playerShip.rotation.set(0, Math.PI, 0);
+            playerStats.speed = 0;
+
             newQuestion();
         }
 
+        function endGame() {
+            isGameRunning = false;
+            document.getElementById('ui-container').style.display = 'none';
+            document.getElementById('game-over-screen').style.display = 'flex';
+            document.getElementById('final-score').innerText = score;
+        }
+
         function newQuestion() {
-            enemies.forEach(e => scene.remove(e));
+            // Nettoyage ennemis et mousses associées
+            enemies.forEach(e => {
+                scene.remove(e);
+                // On pourrait nettoyer foams ici mais c'est un enfant de l'objet, donc supprimé avec
+            });
             enemies = [];
+            // On filtre la liste globale des mousses pour retirer celles des ennemis disparus
+            foams = foams.filter(f => f.parent !== null && f.parent.parent !== null);
 
             currentQuestion.a = Math.floor(Math.random() * (maxTable - minTable + 1)) + minTable;
             currentQuestion.b = Math.floor(Math.random() * 9) + 2;
@@ -501,7 +602,6 @@
             answers.forEach((val, i) => {
                 const enemyContainer = new THREE.Object3D();
                 
-                // Positionnement aléatoire autour du joueur
                 const angle = (Math.PI * 2 / answers.length) * i + Math.random();
                 const dist = 70 + Math.random() * 20;
                 
@@ -511,7 +611,9 @@
                 const model = loadedAssets.enemy.clone();
                 enemyContainer.add(model);
 
-                // Initialisation de la vélocité
+                // Écume pour l'ennemi
+                addFoam(enemyContainer, 3.5);
+
                 enemyContainer.userData = { 
                     value: val, 
                     correct: (val === currentQuestion.ans),
@@ -519,7 +621,6 @@
                     state: 'wander'
                 };
                 
-                // Étiquette nombre
                 const sprite = createTextSprite(val.toString());
                 sprite.position.set(0, 20, 0); 
                 enemyContainer.add(sprite);
@@ -550,7 +651,8 @@
         }
 
         function fireCannon() {
-            playSound('shoot'); // Son de tir
+            if(!isGameRunning) return;
+            playSound('shoot'); 
             const ball = loadedAssets.ball.clone();
             ball.scale.set(4, 4, 4);
             const startPos = new THREE.Vector3(0, 2, 5).applyMatrix4(playerShip.matrixWorld);
@@ -563,7 +665,6 @@
         }
 
         function checkCollisions() {
-            // Collision Joueur - Rochers
             for (let rock of rocks) {
                 const dist = playerShip.position.distanceTo(rock.position);
                 if (dist < rock.userData.collisionRadius + playerStats.radius) {
@@ -574,7 +675,6 @@
                 }
             }
             
-            // Collision Joueur - Ennemis
             for (let enemy of enemies) {
                 const dist = playerShip.position.distanceTo(enemy.position);
                 if (dist < 8 + playerStats.radius) {
@@ -587,82 +687,120 @@
             return false;
         }
 
-        function update() {
-            const time = performance.now() * 0.001; 
+        function update(timeNow) {
+            const time = timeNow * 0.001; 
+            const delta = timeNow - lastTime;
+            lastTime = timeNow;
 
-            // --- Animation Eau (Faible variation de hauteur) ---
+            // --- GESTION DU TIMER ---
+            if (isGameRunning) {
+                timeRemaining -= delta / 1000;
+                if (timeRemaining <= 0) {
+                    timeRemaining = 0;
+                    endGame();
+                }
+                // Mise à jour visuelle Timer
+                const pct = (timeRemaining / gameDuration) * 100;
+                document.getElementById('timer-bar').style.width = pct + '%';
+                // Formatage min:sec
+                const m = Math.floor(timeRemaining / 60);
+                const s = Math.floor(timeRemaining % 60);
+                document.getElementById('timer-text').innerText = 
+                    (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+            }
+
+            // --- ANIMATION EAU (2 Bleus + Écume) ---
             if (waterMesh) {
                 const positions = waterMesh.geometry.attributes.position.array;
+                const colors = waterMesh.geometry.attributes.color.array;
                 const count = positions.length / 3;
+
+                // Couleurs
+                const cDeep = new THREE.Color(0x0077be); // Bleu profond
+                const cFoam = new THREE.Color(0xaaddff); // Bleu très clair (écume)
+
                 for (let i = 0; i < count; i++) {
                     const x = positions[i * 3];
-                    const y = positions[i * 3 + 1]; 
-                    // Amplitude très faible (0.2) pour garder l'eau presque plate mais animée
+                    const y = positions[i * 3 + 1]; // Y local (Z monde avant rotation)
+                    
+                    // Calcul hauteur vague
                     const wave1 = Math.sin(x * 0.05 + time) * 0.2;
                     const wave2 = Math.cos(y * 0.03 + time * 0.8) * 0.2;
-                    const noise = Math.sin(x * 0.1 + y * 0.1 + time * 1.5) * 0.1;
+                    const h = wave1 + wave2; // Hauteur résultante
                     
-                    positions[i * 3 + 2] = wave1 + wave2 + noise;
+                    positions[i * 3 + 2] = h;
+
+                    // Application Couleur : Si c'est un pic (> 0.25), c'est de l'écume
+                    let finalColor;
+                    if (h > 0.15) {
+                        finalColor = cFoam;
+                    } else {
+                        finalColor = cDeep;
+                    }
+
+                    colors[i * 3] = finalColor.r;
+                    colors[i * 3 + 1] = finalColor.g;
+                    colors[i * 3 + 2] = finalColor.b;
                 }
                 waterMesh.geometry.attributes.position.needsUpdate = true;
+                waterMesh.geometry.attributes.color.needsUpdate = true;
             }
+
+            // --- ANIMATION ÉCUME AUTOUR DES BATEAUX ---
+            updateFoam(time);
 
             if (!playerShip) return;
 
-            // Contrôles
-            if (keys.ArrowUp) playerStats.speed += playerStats.acc;
-            if (keys.ArrowDown) playerStats.speed -= playerStats.acc;
+            // Contrôles Joueur
+            if (isGameRunning) {
+                if (keys.ArrowUp) playerStats.speed += playerStats.acc;
+                if (keys.ArrowDown) playerStats.speed -= playerStats.acc;
+                if (keys.ArrowLeft) playerShip.rotation.y += playerStats.turnSpeed;
+                if (keys.ArrowRight) playerShip.rotation.y -= playerStats.turnSpeed;
+            }
             playerStats.speed *= 0.98;
             playerStats.speed = Math.max(Math.min(playerStats.speed, playerStats.maxSpeed), -0.2);
-
-            if (keys.ArrowLeft) playerShip.rotation.y += playerStats.turnSpeed;
-            if (keys.ArrowRight) playerShip.rotation.y -= playerStats.turnSpeed;
-
             playerShip.translateZ(playerStats.speed);
+            
             checkCollisions();
 
             playerShip.position.y = Math.sin(time * 1.0) * 0.1; 
             playerShip.rotation.x = Math.sin(time * 0.6) * 0.02;
             playerShip.rotation.z = Math.cos(time * 0.4) * 0.01;
 
-            // --- IA Ennemis ---
-            const minRadius = 40;
-            const maxRadius = 90;
+            // IA Ennemis
+            if (isGameRunning) {
+                const minRadius = 40;
+                const maxRadius = 90;
+                enemies.forEach(enemy => {
+                    const dist = enemy.position.distanceTo(playerShip.position);
+                    const dirToPlayer = new THREE.Vector3().subVectors(playerShip.position, enemy.position).normalize();
+                    let steering = new THREE.Vector3(0,0,0);
 
-            enemies.forEach(enemy => {
-                // 1. Navigation (Comportement)
-                const dist = enemy.position.distanceTo(playerShip.position);
-                const dirToPlayer = new THREE.Vector3().subVectors(playerShip.position, enemy.position).normalize();
-                let steering = new THREE.Vector3(0,0,0);
-
-                if (dist > maxRadius) steering.add(dirToPlayer.multiplyScalar(0.002));
-                else if (dist < minRadius) steering.sub(dirToPlayer.multiplyScalar(0.003));
-                else {
-                    steering.x += (Math.random() - 0.5) * 0.002;
-                    steering.z += (Math.random() - 0.5) * 0.002;
-                }
-                
-                // 2. Évitement des îles (Collisions Ennemis - Rochers)
-                for (let rock of rocks) {
-                    const distToRock = enemy.position.distanceTo(rock.position);
-                    // Rayon de collision ennemi ~8
-                    if (distToRock < rock.userData.collisionRadius + 8) {
-                        const pushDir = new THREE.Vector3().subVectors(enemy.position, rock.position).normalize();
-                        // Force de repoussement forte
-                        steering.add(pushDir.multiplyScalar(0.01));
-                        // Déplacement immédiat pour éviter de rester coincé
-                        enemy.position.add(pushDir.multiplyScalar(0.1));
+                    if (dist > maxRadius) steering.add(dirToPlayer.multiplyScalar(0.002));
+                    else if (dist < minRadius) steering.sub(dirToPlayer.multiplyScalar(0.003));
+                    else {
+                        steering.x += (Math.random() - 0.5) * 0.002;
+                        steering.z += (Math.random() - 0.5) * 0.002;
                     }
-                }
+                    
+                    for (let rock of rocks) {
+                        const distToRock = enemy.position.distanceTo(rock.position);
+                        if (distToRock < rock.userData.collisionRadius + 8) {
+                            const pushDir = new THREE.Vector3().subVectors(enemy.position, rock.position).normalize();
+                            steering.add(pushDir.multiplyScalar(0.01));
+                            enemy.position.add(pushDir.multiplyScalar(0.1));
+                        }
+                    }
 
-                enemy.userData.velocity.add(steering);
-                enemy.userData.velocity.clampLength(0, 0.08); 
-                enemy.position.add(enemy.userData.velocity);
-
-                const lookTarget = enemy.position.clone().add(enemy.userData.velocity);
-                enemy.lookAt(lookTarget);
-                enemy.position.y = Math.sin(time * 1.2 + (enemy.id||0)) * 0.1;
-            });
+                    enemy.userData.velocity.add(steering);
+                    enemy.userData.velocity.clampLength(0, 0.08); 
+                    enemy.position.add(enemy.userData.velocity);
+                    const lookTarget = enemy.position.clone().add(enemy.userData.velocity);
+                    enemy.lookAt(lookTarget);
+                    enemy.position.y = Math.sin(time * 1.2 + (enemy.id||0)) * 0.1;
+                });
+            }
 
             // Projectiles
             for (let i = projectiles.length - 1; i >= 0; i--) {
@@ -681,8 +819,8 @@
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     const enemy = enemies[j];
                     if (p.position.distanceTo(enemy.position) < 8) {
-                        spawnExplosion(enemy.position.clone()); // Effet particule
-                        playSound('explosion'); // Son d'explosion
+                        spawnExplosion(enemy.position.clone()); 
+                        playSound('explosion'); 
                         handleCollision(enemy);
                         hit = true;
                         break;
@@ -694,7 +832,7 @@
                 }
             }
 
-            updateParticles(); // Animation des explosions
+            updateParticles();
             updateCamera();
         }
 
@@ -729,7 +867,6 @@
             const mode = cameraModes[cameraIndex];
             const crosshair = document.getElementById('crosshair');
             
-            // Affichage viseur seulement en vue Capitaine
             if (cameraIndex === 2) {
                 crosshair.style.display = 'block';
             } else {
@@ -737,8 +874,6 @@
             }
 
             const offset = mode.offset.clone();
-            // Appliquer la rotation du bateau à TOUTES les caméras
-            // Cela permet à la caméra aérienne de rester derrière le bateau
             offset.applyQuaternion(playerShip.quaternion);
             
             const targetPos = playerShip.position.clone().add(offset);
@@ -771,9 +906,9 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        function animate() {
+        function animate(time) {
             requestAnimationFrame(animate);
-            update();
+            update(time);
             renderer.render(scene, camera);
         }
 
