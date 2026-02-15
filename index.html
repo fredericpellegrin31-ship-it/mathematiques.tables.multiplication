@@ -90,7 +90,7 @@
             z-index: 50;
         }
 
-        /* --- Cible de visée (Nouveau) --- */
+        /* --- Cible de visée --- */
         #crosshair {
             position: absolute;
             top: 50%; left: 50%;
@@ -119,11 +119,13 @@
 </head>
 <body>
 
+    <!-- Écran de chargement -->
     <div id="loading-screen">
         <h1>Chargement...</h1>
         <p id="loading-text">Préparation des navires...</p>
     </div>
 
+    <!-- Menu Principal -->
     <div id="start-screen" style="display:none;">
         <h1 style="font-size: 4rem; color: #fbbf24; text-shadow: 4px 4px 0 #000; margin-bottom: 10px;">La Bataille des Tables</h1>
         <p style="font-size: 1.5rem; margin-bottom: 40px;">Capitaine, préparez-vous à calculer !</p>
@@ -133,6 +135,7 @@
         </div>
     </div>
 
+    <!-- HUD Jeu -->
     <div id="ui-container">
         <div id="score-panel" class="hud-panel">Score : <span id="score">0</span></div>
         <div id="question-panel" class="hud-panel">2 x 2 = ?</div>
@@ -142,11 +145,13 @@
         </div>
         <div id="feedback-msg">BRAVO !</div>
         
+        <!-- Viseur -->
         <div id="crosshair">
             <div class="crosshair-circle"></div>
         </div>
     </div>
 
+    <!-- Three.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/MTLLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/OBJLoader.js"></script>
@@ -174,7 +179,7 @@
         let scene, camera, renderer;
         let loadedAssets = {}; 
         let manager;
-        let waterMesh; // Référence pour l'eau
+        let waterMesh;
         
         // Entités du jeu
         let playerShip, playerCannon;
@@ -197,9 +202,9 @@
         const cameraModes = [
             // Arrière
             { name: "Arrière Haute", offset: new THREE.Vector3(0, 25, -35), lookAt: new THREE.Vector3(0, 5, 10) },
-            // Aérienne (Modifiée pour être plus en biais)
-            { name: "Aérienne", offset: new THREE.Vector3(0, 60, -40), lookAt: new THREE.Vector3(0, 0, 20) },
-            // Proue (Avec viseur)
+            // Aérienne (En biais)
+            { name: "Aérienne", offset: new THREE.Vector3(0, 70, -40), lookAt: new THREE.Vector3(0, 0, 20) },
+            // Proue
             { name: "Proue (Capitaine)", offset: new THREE.Vector3(0, 4, 8), lookAt: new THREE.Vector3(0, 2, 50) }
         ];
 
@@ -219,12 +224,13 @@
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(ambientLight);
 
             const sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
             sunLight.position.set(100, 100, 50);
             sunLight.castShadow = true;
+            // Augmenter la zone d'ombre
             sunLight.shadow.camera.left = -200;
             sunLight.shadow.camera.right = 200;
             sunLight.shadow.camera.top = 200;
@@ -233,15 +239,17 @@
             sunLight.shadow.mapSize.height = 2048;
             scene.add(sunLight);
 
-            // --- EAU REALISTE (Modification) ---
-            // On augmente le nombre de segments (64x64) pour permettre les vagues
-            const waterGeo = new THREE.PlaneGeometry(3000, 3000, 64, 64); 
+            // --- EAU STYLE "WIND WAKER" ---
+            // Couleur Cyan/Bleu vif, Flat shading pour l'effet low-poly/cel-shaded
+            const waterGeo = new THREE.PlaneGeometry(3000, 3000, 40, 40); 
             const waterMat = new THREE.MeshPhongMaterial({ 
-                color: 0x0ea5e9, 
-                shininess: 90, 
+                color: 0x00aaff, // Bleu plus vif style Nintendo
+                emissive: 0x001133,
+                specular: 0xffffff,
+                shininess: 40, 
                 transparent: true, 
-                opacity: 0.85,
-                flatShading: true // Donne un look "low poly" sympa aux vagues
+                opacity: 0.9,
+                flatShading: true 
             });
             waterMesh = new THREE.Mesh(waterGeo, waterMat);
             waterMesh.rotation.x = -Math.PI / 2;
@@ -340,6 +348,7 @@
         function buildWorld() {
             playerShip = loadedAssets.player.clone();
             playerShip.scale.set(1.5, 1.5, 1.5);
+            // Si c'est un modèle chargé (pas un placeholder), on le tourne
             if (!playerShip.geometry) playerShip.rotation.y = Math.PI; 
             
             playerCannon = loadedAssets.cannon.clone();
@@ -397,24 +406,38 @@
             answers.sort(() => Math.random() - 0.5);
 
             answers.forEach((val, i) => {
-                const enemy = loadedAssets.enemy.clone();
+                // Créer un conteneur pour l'ennemi pour gérer proprement la direction
+                const enemyContainer = new THREE.Object3D();
+                
+                // Positionnement initial
                 const angleOffset = (i - 1) * 0.4;
                 const spawnAngle = playerShip.rotation.y + Math.PI + angleOffset; 
-                const dist = 80; // Un peu plus loin au départ
+                const dist = 90;
                 
-                enemy.position.x = playerShip.position.x + Math.sin(spawnAngle) * dist;
-                enemy.position.z = playerShip.position.z + Math.cos(spawnAngle) * dist;
+                enemyContainer.position.x = playerShip.position.x + Math.sin(spawnAngle) * dist;
+                enemyContainer.position.z = playerShip.position.z + Math.cos(spawnAngle) * dist;
                 
-                // Orienter vers le joueur
-                enemy.lookAt(playerShip.position);
+                // Ajouter le modèle visuel
+                const model = loadedAssets.enemy.clone();
+                // IMPORTANT : Correction de la rotation du modèle à l'intérieur du conteneur
+                // Si c'est le modèle OBJ, il regarde souvent vers l'arrière, on le tourne de 180°
+                if (!model.geometry) {
+                    model.rotation.y = Math.PI; 
+                }
+                enemyContainer.add(model);
 
+                // Orienter le conteneur vers le joueur (uniquement sur Y pour rester plat)
+                enemyContainer.lookAt(playerShip.position.x, enemyContainer.position.y, playerShip.position.z);
+
+                // Étiquette nombre (Plus haut maintenant : y=20)
                 const sprite = createTextSprite(val.toString());
-                sprite.position.set(0, 8, 0);
-                enemy.add(sprite);
+                sprite.position.set(0, 20, 0); 
+                enemyContainer.add(sprite);
 
-                enemy.userData = { value: val, correct: (val === currentQuestion.ans) };
-                scene.add(enemy);
-                enemies.push(enemy);
+                enemyContainer.userData = { value: val, correct: (val === currentQuestion.ans) };
+                
+                scene.add(enemyContainer);
+                enemies.push(enemyContainer);
             });
         }
 
@@ -443,7 +466,7 @@
             ball.scale.set(4, 4, 4);
             const startPos = new THREE.Vector3(0, 2, 5).applyMatrix4(playerShip.matrixWorld);
             ball.position.copy(startPos);
-            // Vitesse ajustée pour la nouvelle visée
+            
             const velocity = new THREE.Vector3(0, 0, 2.5).applyQuaternion(playerShip.quaternion);
             ball.userData = { velocity: velocity, life: 120 };
             scene.add(ball);
@@ -468,30 +491,26 @@
                 // Rayon estimé du bateau ennemi ~8
                 if (dist < 8 + playerStats.radius) {
                     const dir = new THREE.Vector3().subVectors(playerShip.position, enemy.position).normalize();
-                    playerShip.position.add(dir.multiplyScalar(1.0)); // Rebond plus fort
-                    playerStats.speed *= -0.5;
-                    // On peut aussi repousser l'ennemi un peu
-                    enemy.position.sub(dir.multiplyScalar(0.5));
+                    playerShip.position.add(dir.multiplyScalar(1.5)); // Rebond plus fort
+                    playerStats.speed = -0.3; // Stop net et petit recul
                     return true;
                 }
             }
-            
             return false;
         }
 
         function update() {
-            const time = performance.now() * 0.001; // Temps en secondes
+            const time = performance.now() * 0.001; 
 
-            // --- Animation de l'eau (Vagues) ---
+            // --- Animation Eau (Wind Waker style : houle lente et faible) ---
             if (waterMesh) {
                 const positions = waterMesh.geometry.attributes.position.array;
                 const count = positions.length / 3;
-                // On boucle sur les sommets pour créer des vagues
                 for (let i = 0; i < count; i++) {
                     const x = positions[i * 3];
-                    const y = positions[i * 3 + 1]; // Coordonnée Y locale (Z monde avant rotation)
-                    // Formule simple pour des vagues ondulantes
-                    positions[i * 3 + 2] = Math.sin(x * 0.05 + time * 1.5) * 2.5 + Math.cos(y * 0.05 + time * 1.2) * 2.5;
+                    const y = positions[i * 3 + 1]; 
+                    // Amplitude très faible (0.8) et fréquence basse
+                    positions[i * 3 + 2] = Math.sin(x * 0.03 + time * 0.8) * 0.8 + Math.cos(y * 0.03 + time * 0.5) * 0.8;
                 }
                 waterMesh.geometry.attributes.position.needsUpdate = true;
             }
@@ -507,25 +526,25 @@
             if (keys.ArrowLeft) playerShip.rotation.y += playerStats.turnSpeed;
             if (keys.ArrowRight) playerShip.rotation.y -= playerStats.turnSpeed;
 
-            // Mouvement Joueur
             playerShip.translateZ(playerStats.speed);
-            
-            // Vérification des collisions (Rochers + Ennemis)
             checkCollisions();
 
-            // Effet de tangage (Bateau Joueur)
-            playerShip.position.y = Math.sin(time * 1.2) * 0.3; // Un peu plus prononcé
-            playerShip.rotation.x = Math.sin(time * 0.8) * 0.03;
-            playerShip.rotation.z = Math.cos(time * 0.5) * 0.02;
+            // Tangage Joueur (très doux)
+            playerShip.position.y = Math.sin(time * 1.0) * 0.2; 
+            playerShip.rotation.x = Math.sin(time * 0.6) * 0.02;
+            playerShip.rotation.z = Math.cos(time * 0.4) * 0.01;
 
-            // --- Mise à jour des ennemis (Mouvement lent) ---
+            // --- Ennemis ---
             enemies.forEach(enemy => {
-                // Avancer lentement
-                enemy.translateZ(0.02);
+                // Avancer vers le joueur
+                // On recalcule l'orientation pour qu'ils suivent le joueur
+                enemy.lookAt(playerShip.position.x, enemy.position.y, playerShip.position.z);
+                
+                // Vitesse constante
+                enemy.translateZ(0.05); 
                 
                 // Tangage ennemi
-                enemy.position.y = Math.sin(time * 1.5 + enemy.id) * 0.2; // enemy.id est undefined mais +undefined = NaN, donc utilisation de random implicite ou juste time
-                enemy.rotation.z = Math.sin(time * 0.5) * 0.02;
+                enemy.position.y = Math.sin(time * 1.2 + enemy.uuid.charCodeAt(0)) * 0.15;
             });
 
             // Projectiles
@@ -533,11 +552,9 @@
                 const p = projectiles[i];
                 p.position.add(p.userData.velocity);
                 p.userData.life--;
-                
-                // Gravité sur le boulet pour plus de réalisme
-                p.position.y -= 0.05; 
+                p.position.y -= 0.03; // Gravité légère
 
-                // Collision Boulet -> Eau
+                // Toucher l'eau
                 if(p.position.y < -2) {
                      scene.remove(p);
                      projectiles.splice(i, 1);
@@ -590,9 +607,8 @@
 
         function updateCamera() {
             const mode = cameraModes[cameraIndex];
-            
-            // Affichage du viseur seulement pour la vue 2 (Capitaine)
             const crosshair = document.getElementById('crosshair');
+            
             if (cameraIndex === 2) {
                 crosshair.style.display = 'block';
             } else {
@@ -600,12 +616,8 @@
             }
 
             const offset = mode.offset.clone();
-            // Appliquer la rotation du bateau à la caméra sauf pour la vue "Aérienne" (index 1) qui reste fixe par rapport au monde ou suit différemment
             if (cameraIndex !== 1) {
                 offset.applyQuaternion(playerShip.quaternion);
-            } else {
-                // Pour la vue aérienne en biais, on veut qu'elle suive la position mais garde son orientation globale
-                // On garde l'offset tel quel
             }
             
             const targetPos = playerShip.position.clone().add(offset);
