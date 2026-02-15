@@ -2,902 +2,612 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>La Bataille des Tables - CE1</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bataille Navale - Monde Ouvert</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Ciel bleu clair style cartoon */
-        body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: 'Segoe UI', Tahoma, Verdana, sans-serif; user-select: none; }
+        body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: #0088ff; touch-action: none; user-select: none; }
         canvas { display: block; }
-
-        /* --- Interface Utilisateur (HUD) --- */
-        #ui-container {
+        
+        #ui-layer {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none;
-            display: none;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 15px;
+            z-index: 100;
         }
-
-        .hud-panel {
-            position: absolute;
-            background: rgba(15, 23, 42, 0.8);
-            border: 3px solid #fbbf24;
-            border-radius: 15px;
-            padding: 15px 25px;
-            color: white;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-
-        #score-panel { top: 20px; left: 20px; font-size: 1.2rem; }
-        #camera-panel { top: 20px; right: 20px; font-size: 0.9rem; color: #cbd5e1; }
         
-        #question-panel {
-            top: 80px; /* Décalé pour laisser place au timer */
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #fbbf24;
-            text-shadow: 2px 2px 0 #000;
-            min-width: 300px;
+        .hud-element {
+            pointer-events: auto; background: #fff;
+            color: #005bb7; padding: 10px 20px; border-radius: 12px;
+            border: 3px solid #005bb7; box-shadow: 0 4px 0px #003d7a; font-weight: bold;
+            font-size: 1.2rem; display: flex; align-items: center; justify-content: center;
         }
 
-        /* --- Barre de Temps --- */
+        .math-question {
+            background: #ffcc00; color: #b34700; border-color: #fff;
+            font-size: 1.8rem; min-width: 180px;
+        }
+        
+        .btn-action {
+            pointer-events: auto; background: #ff4444; color: white; 
+            padding: 15px 30px; border-radius: 50px; font-size: 1.5rem; 
+            box-shadow: 0 6px 0px #990000; border: 4px solid #fff; 
+            font-weight: 900; cursor: pointer; display: flex; 
+            align-items: center; justify-content: center; transition: transform 0.1s;
+        }
+        .btn-action:active { transform: translateY(4px); box-shadow: 0 2px 0px #990000; }
+        
+        .btn-camera {
+            pointer-events: auto; background: #ffcc00; color: #b34700;
+            width: 60px; height: 60px; border-radius: 50%; font-size: 1.5rem;
+            border: 3px solid #fff; box-shadow: 0 4px 0px #cca300;
+            display: flex; justify-content: center; align-items: center; cursor: pointer;
+        }
+        .btn-camera:active { transform: translateY(3px); box-shadow: none; }
+
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 40px; height: 40px; border: 2px solid rgba(255,255,255,0.7);
+            border-radius: 50%; pointer-events: none; z-index: 50;
+        }
+        #crosshair::before, #crosshair::after {
+            content: ''; position: absolute; background: rgba(255,255,255,0.7);
+        }
+        #crosshair::before { width: 100%; height: 2px; top: 50%; transform: translateY(-50%); }
+        #crosshair::after { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+
+        #feedback-text {
+            position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 4rem; font-weight: 900; opacity: 0; text-align: center;
+            color: white; -webkit-text-stroke: 2px #000;
+            transition: opacity 0.2s; z-index: 20; pointer-events: none;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            width: 90%;
+        }
+
         #timer-container {
-            position: absolute;
-            top: 20px; left: 50%;
-            transform: translateX(-50%);
-            width: 400px;
-            height: 25px;
-            background: rgba(0,0,0,0.6);
-            border: 3px solid #fff;
-            border-radius: 20px;
-            overflow: hidden;
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            width: 30%; height: 20px; background: rgba(0,0,0,0.3);
+            border-radius: 10px; border: 2px solid white; overflow: hidden;
             pointer-events: none;
         }
         #timer-bar {
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, #facc15, #fbbf24);
-            transition: width 0.2s linear;
+            width: 100%; height: 100%; background: linear-gradient(90deg, #00ff00, #ffff00, #ff0000);
+            transform-origin: left; transition: transform 0.1s linear;
         }
-        #timer-text {
-            position: absolute;
-            top: 50px; left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            font-weight: bold;
-            font-size: 1.2rem;
-            text-shadow: 1px 1px 2px black;
+        
+        #start-screen, #end-screen {
+            position: absolute; inset: 0; background: #0088ff;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 200; color: white; text-align: center; padding: 20px;
         }
-
-        #controls-hint {
-            bottom: 20px; left: 50%;
-            transform: translateX(-50%);
-            font-size: 1rem;
-            background: rgba(0,0,0,0.5);
-            border: 1px solid white;
-            border-radius: 50px;
-            padding: 10px 30px;
-        }
-
-        /* --- Écrans de Menu --- */
-        #loading-screen, #start-screen, #game-over-screen {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(135deg, #0284c7, #0c4a6e);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            z-index: 100;
-        }
-
-        #game-over-screen { display: none; z-index: 110; }
-
-        .btn {
-            background: #fbbf24;
-            color: #451a03;
-            border: none;
-            padding: 15px 40px;
-            margin: 10px;
-            font-size: 1.5rem;
-            font-weight: bold;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: transform 0.1s;
-            box-shadow: 0 6px 0 #b45309;
-        }
-        .btn:hover { transform: scale(1.05); background: #fcd34d; }
-        .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #b45309; }
-
-        #feedback-msg {
-            position: absolute;
-            top: 40%; width: 100%;
-            text-align: center;
-            font-size: 5rem;
-            font-weight: bold;
-            text-shadow: 0 0 20px black;
-            display: none;
-            z-index: 50;
-        }
-
-        /* --- Cible de visée --- */
-        #crosshair {
-            position: absolute;
-            top: 50%; left: 50%;
-            width: 40px; height: 40px;
-            transform: translate(-50%, -50%);
+        
+        #controls-area {
+            position: absolute; bottom: 20px; left: 20px; right: 20px;
+            display: flex; justify-content: space-between; align-items: flex-end;
             pointer-events: none;
-            display: none;
-            z-index: 40;
         }
-        #crosshair::before, #crosshair::after {
-            content: '';
-            position: absolute;
-            background: rgba(255, 50, 50, 0.8);
+        .control-group { pointer-events: auto; display: flex; gap: 15px; align-items: center; }
+        .dpad-row { display: flex; gap: 10px; }
+        
+        .control-btn {
+            width: 70px; height: 70px; background: white; border-radius: 15px;
+            border: 4px solid #005bb7; color: #005bb7; font-size: 30px;
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 4px 0 #003d7a; cursor: pointer; user-select: none;
         }
-        #crosshair::before { top: 18px; left: 0; width: 40px; height: 4px; }
-        #crosshair::after { top: 0; left: 18px; width: 4px; height: 40px; }
-        .crosshair-circle {
-            position: absolute;
-            top: 0; left: 0;
-            width: 34px; height: 34px;
-            border: 3px solid rgba(255, 50, 50, 0.5);
-            border-radius: 50%;
-        }
-
+        .control-btn:active, .control-btn.pressed { transform: translateY(4px); box-shadow: none; background: #eee; }
     </style>
 </head>
 <body>
 
-    <!-- Écran de chargement -->
-    <div id="loading-screen">
-        <h1>Chargement...</h1>
-        <p id="loading-text">Préparation des navires...</p>
+    <div id="start-screen">
+        <h1 class="text-6xl font-black mb-4 italic text-white" style="-webkit-text-stroke: 2px #004488;">PIRATE OPEN WORLD</h1>
+        <p class="text-2xl mb-2 font-bold text-white">Navigue librement et coule la bonne réponse !</p>
+        <p class="text-xl mb-8 text-white opacity-80">Flèches pour piloter, ESPACE pour tirer.</p>
+        <button onclick="startGame()" class="bg-yellow-400 hover:bg-yellow-500 text-blue-900 px-12 py-5 rounded-2xl text-3xl font-black transition-transform transform hover:scale-105 border-b-8 border-yellow-600 shadow-xl">JOUER</button>
     </div>
 
-    <!-- Menu Principal -->
-    <div id="start-screen" style="display:none;">
-        <h1 style="font-size: 4rem; color: #fbbf24; text-shadow: 4px 4px 0 #000; margin-bottom: 10px;">La Bataille des Tables</h1>
-        <p style="font-size: 1.5rem; margin-bottom: 40px;">Capitaine, préparez-vous à calculer !</p>
-        <div>
-            <button class="btn" onclick="startGame(2, 5)">Niveau CE1 (x2 à x5)</button>
-            <button class="btn" onclick="startGame(2, 10)">Niveau Expert (x2 à x10)</button>
+    <div id="end-screen" style="display:none;">
+        <h1 id="end-title" class="text-6xl font-black mb-4 italic text-white" style="-webkit-text-stroke: 2px #004488;">TEMPS ÉCOULÉ !</h1>
+        <p id="final-score" class="text-4xl mb-8 font-bold text-white">Score: 0</p>
+        <button onclick="location.reload()" class="bg-yellow-400 hover:bg-yellow-500 text-blue-900 px-10 py-4 rounded-xl text-2xl font-black border-b-4 border-yellow-600">REJOUER</button>
+    </div>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer">
+        <div id="crosshair"></div>
+        <div class="flex justify-between items-start w-full relative">
+            <div class="flex flex-col gap-2">
+                <div class="hud-element" id="score-display">PTS: 0</div>
+                <button class="btn-camera" onpointerdown="changeCamera(event)">🎥</button>
+            </div>
+            
+            <div id="timer-container"><div id="timer-bar"></div></div>
+            
+            <div class="hud-element math-question" id="question-display">...</div>
+        </div>
+
+        <div id="feedback-text"></div>
+
+        <div id="controls-area">
+            <div class="control-group flex-col items-start">
+                <div class="control-btn" id="btn-up" onpointerdown="input.up=true" onpointerup="input.up=false" onpointerleave="input.up=false">⬆️</div>
+                <div class="dpad-row">
+                    <div class="control-btn" id="btn-left" onpointerdown="input.left=true" onpointerup="input.left=false" onpointerleave="input.left=false">⬅️</div>
+                    <div class="control-btn" id="btn-down" onpointerdown="input.down=true" onpointerup="input.down=false" onpointerleave="input.down=false">⬇️</div>
+                    <div class="control-btn" id="btn-right" onpointerdown="input.right=true" onpointerup="input.right=false" onpointerleave="input.right=false">➡️</div>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <button class="btn-action" onpointerdown="shoot(event)">FEU ! 🔥</button>
+            </div>
         </div>
     </div>
-
-    <!-- Écran Game Over -->
-    <div id="game-over-screen">
-        <h1 style="font-size: 4rem; color: #ef4444; text-shadow: 4px 4px 0 #000;">TEMPS ÉCOULÉ !</h1>
-        <p style="font-size: 2rem;">Score Final : <span id="final-score">0</span></p>
-        <button class="btn" onclick="location.reload()">Rejouer</button>
-    </div>
-
-    <!-- HUD Jeu -->
-    <div id="ui-container">
-        <div id="timer-container"><div id="timer-bar"></div></div>
-        <div id="timer-text">02:00</div>
-        
-        <div id="score-panel" class="hud-panel">Score : <span id="score">0</span></div>
-        <div id="question-panel" class="hud-panel">2 x 2 = ?</div>
-        <div id="camera-panel" class="hud-panel">Caméra : Arrière Haute (Touche C)</div>
-        <div id="controls-hint" class="hud-panel">
-            ⬆️ Avancer | ⬅️➡️ Tourner | <b>ESPACE</b> Tirer | <b>C</b> Changer de vue
-        </div>
-        <div id="feedback-msg">BRAVO !</div>
-        
-        <!-- Viseur -->
-        <div id="crosshair">
-            <div class="crosshair-circle"></div>
-        </div>
-    </div>
-
-    <!-- Three.js CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/MTLLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/OBJLoader.js"></script>
 
     <script>
-        /* =========================================
-           CONFIGURATION & ÉTAT DU JEU
-           ========================================= */
-        
-        const ASSETS_PATH = './'; 
-        
-        // Liste des fichiers à charger
-        const MODELS = {
-            player: { obj: 'ship-medium.obj', mtl: 'ship-medium.mtl' },
-            enemy:  { obj: 'ship-pirate-medium.obj', mtl: 'ship-pirate-medium.mtl' },
-            cannon: { obj: 'cannon.obj', mtl: 'cannon.mtl' },
-            ball:   { obj: 'cannon-ball.obj', mtl: 'cannon-ball.mtl' },
-            rockA:  { obj: 'rocks-a.obj', mtl: 'rocks-a.mtl' },
-            rockB:  { obj: 'rocks-b.obj', mtl: 'rocks-b.mtl' },
-            rockC:  { obj: 'rocks-sand-b.obj', mtl: 'rocks-sand-b.mtl' },
-            rockD:  { obj: 'rocks-sand-c.obj', mtl: 'rocks-sand-c.mtl' }
-        };
+        // --- Audio System (Synthesized) ---
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
 
-        let scene, camera, renderer;
-        let loadedAssets = {}; 
-        let manager;
-        let waterMesh;
-        let audioCtx; 
-        
-        // Entités
-        let playerShip, playerCannon;
-        let enemies = [];
-        let projectiles = [];
-        let particles = [];
-        let rocks = [];
-        let foams = []; // Liste des objets écume à animer
-        
-        // Jeu
-        let score = 0;
-        let minTable = 2;
-        let maxTable = 5;
-        let currentQuestion = { a: 0, b: 0, ans: 0 };
-        
-        // Timer
-        let gameDuration = 120; // 2 minutes en secondes
-        let timeRemaining = 120;
-        let isGameRunning = false;
-        let lastTime = 0;
-
-        // Contrôles
-        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Space: false };
-        const playerStats = { speed: 0, rot: 0, maxSpeed: 0.5, acc: 0.01, turnSpeed: 0.025, radius: 5 };
-        
-        let cameraIndex = 0;
-        const cameraModes = [
-            { name: "Arrière Haute", offset: new THREE.Vector3(0, 25, -35), lookAt: new THREE.Vector3(0, 5, 10) },
-            { name: "Aérienne", offset: new THREE.Vector3(0, 70, -40), lookAt: new THREE.Vector3(0, 0, 20) },
-            { name: "Proue (Capitaine)", offset: new THREE.Vector3(0, 4, 8), lookAt: new THREE.Vector3(0, 2, 50) }
-        ];
-
-        /* =========================================
-           AUDIO
-           ========================================= */
-        function initAudio() {
-            try {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            } catch(e) { console.warn("AudioContext non supporté"); }
+        function playShootSound() {
+            if (!audioCtx) audioCtx = new AudioCtx();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.3);
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.3);
         }
 
-        function playSound(type) {
-            if (!audioCtx) return;
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-
-            const osc = audioCtx.createOscillator();
+        function playExplosionSound() {
+            if (!audioCtx) audioCtx = new AudioCtx();
+            const bufferSize = audioCtx.sampleRate * 1;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(500, audioCtx.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.8);
             const gain = audioCtx.createGain();
-            osc.connect(gain);
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
+            noise.connect(filter);
+            filter.connect(gain);
             gain.connect(audioCtx.destination);
-
-            const now = audioCtx.currentTime;
-
-            if (type === 'shoot') {
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(150, now);
-                osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
-                gain.gain.setValueAtTime(0.5, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-                osc.start(now);
-                osc.stop(now + 0.3);
-            } else if (type === 'explosion') {
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(100, now);
-                osc.frequency.exponentialRampToValueAtTime(10, now + 0.5);
-                gain.gain.setValueAtTime(0.8, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-                osc.start(now);
-                osc.stop(now + 0.5);
-            }
+            noise.start();
+            noise.stop(audioCtx.currentTime + 0.8);
         }
 
-        /* =========================================
-           PARTICULES
-           ========================================= */
-        function spawnExplosion(position) {
-            const particleCount = 20;
-            const geometry = new THREE.TetrahedronGeometry(1.5, 0); 
-            const mat1 = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-            const mat2 = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+        // --- Variables Globales ---
+        let scene, camera, renderer, playerShip, water, sun;
+        let clouds = [], islands = [];
+        let enemyShips = []; 
+        let cannonballs = [];
+        let explosions = [];
+        let shipWheel;
+        let shipWake = []; // Pour les particules de sillage
+        let foamCircles = []; // Pour les ronds d'écume
 
-            for (let i = 0; i < particleCount; i++) {
-                const mesh = new THREE.Mesh(geometry, Math.random() > 0.5 ? mat1 : mat2);
-                mesh.position.copy(position);
-                mesh.position.x += (Math.random() - 0.5) * 4;
-                mesh.position.y += (Math.random() - 0.5) * 4;
-                mesh.position.z += (Math.random() - 0.5) * 4;
+        let gameActive = false;
+        let score = 0;
+        let gameTime = 120; 
+        let timeRemaining = gameTime;
+        let lastTime = 0;
+        let currentResult = 0;
 
-                const velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 0.8,
-                    (Math.random()) * 0.8 + 0.2, 
-                    (Math.random() - 0.5) * 0.8
-                );
-                scene.add(mesh);
-                particles.push({ mesh: mesh, velocity: velocity, life: 1.0 });
-            }
+        const input = { up: false, down: false, left: false, right: false };
+        const shipPhys = { speed: 0, maxSpeed: 0.8, rotation: 0, turnSpeed: 0.03, acceleration: 0.01, friction: 0.98 };
+        let currentCamMode = 2; 
+
+        // --- Initialisation ---
+
+        function startGame() {
+            document.getElementById('start-screen').style.display = 'none';
+            init();
+            gameActive = true;
+            lastTime = performance.now();
+            spawnWave(); 
+            animate();
         }
-
-        function updateParticles() {
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
-                p.life -= 0.02;
-                p.mesh.position.add(p.velocity);
-                p.mesh.rotation.x += 0.1;
-                p.mesh.rotation.z += 0.1;
-                p.velocity.y -= 0.02; 
-                p.mesh.scale.setScalar(p.life);
-                if (p.life <= 0) {
-                    scene.remove(p.mesh);
-                    particles.splice(i, 1);
-                }
-            }
-        }
-
-        /* =========================================
-           ECUME & EAU (Style Wind Waker)
-           ========================================= */
-        
-        function addFoam(object, scale = 1.0) {
-            // Création d'un anneau blanc simple (low poly)
-            const geometry = new THREE.RingGeometry(scale, scale + 1.5, 7); // 7 segments pour un style un peu "cassé"
-            const material = new THREE.MeshBasicMaterial({ 
-                color: 0xffffff, 
-                transparent: true, 
-                opacity: 0.6, 
-                side: THREE.DoubleSide 
-            });
-            const foam = new THREE.Mesh(geometry, material);
-            foam.rotation.x = -Math.PI / 2;
-            foam.position.y = 0.2; // Juste au dessus de l'eau
-            
-            // Stockage pour l'animation
-            foam.userData = { 
-                baseScale: 1, 
-                pulseSpeed: 2 + Math.random(), 
-                pulseOffset: Math.random() * 10 
-            };
-            
-            object.add(foam);
-            foams.push(foam);
-        }
-
-        function updateFoam(time) {
-            foams.forEach(foam => {
-                const s = 1 + Math.sin(time * foam.userData.pulseSpeed + foam.userData.pulseOffset) * 0.15;
-                foam.scale.set(s, s, 1);
-                foam.rotation.z += 0.005; // Rotation lente
-            });
-        }
-
-        /* =========================================
-           INITIALISATION
-           ========================================= */
 
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87CEEB); 
-            scene.fog = new THREE.Fog(0x87CEEB, 80, 450);
+            scene.background = new THREE.Color(0x0088ff);
+            scene.fog = new THREE.Fog(0x0088ff, 100, 1000);
 
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 4000);
+            
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-            scene.add(ambientLight);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            sun = new THREE.DirectionalLight(0xffffff, 0.8);
+            sun.position.set(200, 400, 200);
+            sun.castShadow = true;
+            sun.shadow.camera.left = -500; sun.shadow.camera.right = 500;
+            sun.shadow.camera.top = 500; sun.shadow.camera.bottom = -500;
+            scene.add(sun);
 
-            const sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
-            sunLight.position.set(100, 100, 50);
-            sunLight.castShadow = true;
-            sunLight.shadow.camera.left = -200;
-            sunLight.shadow.camera.right = 200;
-            sunLight.shadow.camera.top = 200;
-            sunLight.shadow.camera.bottom = -200;
-            sunLight.shadow.mapSize.width = 2048;
-            sunLight.shadow.mapSize.height = 2048;
-            scene.add(sunLight);
+            const waterGeo = new THREE.PlaneGeometry(10000, 10000, 64, 64);
+            const waterMat = new THREE.MeshToonMaterial({ color: 0x0088ff, shininess: 50 });
+            water = new THREE.Mesh(waterGeo, waterMat);
+            water.rotation.x = -Math.PI / 2;
+            water.receiveShadow = true;
+            scene.add(water);
 
-            // --- EAU WIND WAKER (Couleurs vertex) ---
-            const waterGeo = new THREE.PlaneGeometry(3000, 3000, 64, 64); 
-            
-            // Ajouter des couleurs par sommet pour l'effet bicolore
-            const count = waterGeo.attributes.position.count;
-            waterGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-            
-            const waterMat = new THREE.MeshPhongMaterial({ 
-                vertexColors: true, // IMPORTANT: Active les couleurs par sommet
-                shininess: 60, 
-                flatShading: true,
-                transparent: true,
-                opacity: 0.9
-            });
-            
-            waterMesh = new THREE.Mesh(waterGeo, waterMat);
-            waterMesh.rotation.x = -Math.PI / 2;
-            waterMesh.receiveShadow = true;
-            scene.add(waterMesh);
+            createPlayerShip();
+            createClouds();
+            createWorldIslands();
 
-            window.addEventListener('resize', onWindowResize, false);
-            document.addEventListener('keydown', onKeyDown);
-            document.addEventListener('keyup', onKeyUp);
-            document.addEventListener('click', () => { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); });
-
-            initAudio();
-            loadAllAssets();
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', (e) => handleKey(e, true));
+            window.addEventListener('keyup', (e) => handleKey(e, false));
         }
 
-        function loadAllAssets() {
-            manager = new THREE.LoadingManager();
-            manager.onLoad = () => {
-                document.getElementById('loading-screen').style.display = 'none';
-                document.getElementById('start-screen').style.display = 'flex';
-                buildWorld();
-                requestAnimationFrame(animate);
-            };
+        // --- Objets 3D ---
 
-            const mtlLoader = new THREE.MTLLoader(manager);
-            const objLoader = new THREE.OBJLoader(manager);
-            mtlLoader.setPath(ASSETS_PATH);
-            objLoader.setPath(ASSETS_PATH);
+        function buildShipMesh(scale, hullColor, sailColor, isEnemy) {
+            const shipGroup = new THREE.Group();
+            
+            const hullMat = new THREE.MeshToonMaterial({ color: hullColor });
+            const hullBase = new THREE.Mesh(new THREE.SphereGeometry(3.5, 12, 12), hullMat);
+            hullBase.scale.set(1.2, 1.8, 2.6);
+            hullBase.position.y = -0.5;
+            hullBase.castShadow = true;
+            shipGroup.add(hullBase);
 
-            const isBlobEnv = window.location.protocol === 'blob:' || window.location.protocol === 'about:';
+            const deck = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 1, 12), new THREE.MeshToonMaterial({ color: 0x8f6a4e }));
+            deck.scale.set(1, 0.5, 2.5);
+            deck.position.y = 2.5;
+            shipGroup.add(deck);
 
-            if (isBlobEnv) {
-                console.warn("Mode Preview : Placeholders activés.");
-                document.getElementById('loading-text').innerText = "Mode Aperçu : Utilisation de modèles simplifiés...";
-                for (const key of Object.keys(MODELS)) {
-                    loadedAssets[key] = createPlaceholder(key);
+            const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 18), new THREE.MeshToonMaterial({color: 0x2d1a0a}));
+            mast.position.y = 8.5;
+            shipGroup.add(mast);
+
+            // Vigie
+            const nest = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.2, 1.8, 8), new THREE.MeshToonMaterial({color: 0x3d2516}));
+            nest.position.y = 15.5;
+            shipGroup.add(nest);
+
+            // Voile (Transparente)
+            const sailMat = new THREE.MeshToonMaterial({ color: sailColor, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+            const sail = new THREE.Mesh(new THREE.BoxGeometry(10, 11, 0.2), sailMat);
+            sail.position.set(0, 9.5, 0.6);
+            sail.rotation.x = 0.1;
+            shipGroup.add(sail);
+
+            if(!isEnemy) {
+                shipWheel = new THREE.Group();
+                const wheelCircle = new THREE.Mesh(new THREE.TorusGeometry(1, 0.15, 8, 20), new THREE.MeshToonMaterial({color: 0x8b4513}));
+                shipWheel.add(wheelCircle);
+                for(let i=0; i<6; i++) {
+                    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.2, 0.1), new THREE.MeshToonMaterial({color: 0x8b4513}));
+                    spoke.rotation.z = (i/6) * Math.PI;
+                    shipWheel.add(spoke);
                 }
-                setTimeout(() => manager.onLoad(), 800);
-                return;
+                shipWheel.position.set(0, 4.5, 4);
+                shipWheel.rotation.x = -0.5;
+                shipGroup.add(shipWheel);
             }
 
-            for (const [key, files] of Object.entries(MODELS)) {
-                mtlLoader.load(files.mtl, (materials) => {
-                    materials.preload();
-                    objLoader.setMaterials(materials);
-                    objLoader.load(files.obj, (object) => {
-                        object.traverse((child) => {
-                            if (child.isMesh) {
-                                child.castShadow = true;
-                                child.receiveShadow = true;
-                            }
-                        });
-                        loadedAssets[key] = object;
-                    }, undefined, (err) => {
-                        loadedAssets[key] = createPlaceholder(key);
-                    });
-                }, undefined, (err) => {
-                    objLoader.setMaterials(null);
-                    objLoader.load(files.obj, (obj) => { loadedAssets[key] = obj; }, undefined, () => {
-                        loadedAssets[key] = createPlaceholder(key);
-                    });
-                });
+            if(isEnemy) {
+                 const skull = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 8), new THREE.MeshBasicMaterial({color: 0xffffff}));
+                 skull.position.set(0, 17.5, 0);
+                 skull.scale.set(1, 1, 0.2);
+                 shipGroup.add(skull);
             }
+
+            shipGroup.scale.setScalar(scale);
+            shipGroup.userData = { radius: 6 * scale, isEnemy: isEnemy };
+            return shipGroup;
         }
 
-        function createPlaceholder(type) {
-            let geometry, material, mesh;
-            if (type.includes('ship')) {
-                geometry = new THREE.BoxGeometry(2, 1, 5);
-                material = new THREE.MeshStandardMaterial({ color: type === 'player' ? 0x8b5a2b : 0x444444 });
-                mesh = new THREE.Mesh(geometry, material);
-                const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4), new THREE.MeshStandardMaterial({color:0xffffff}));
-                mast.position.y = 2;
-                mesh.add(mast);
-            } else if (type.includes('rock')) {
-                geometry = new THREE.DodecahedronGeometry(1.5);
-                material = new THREE.MeshStandardMaterial({ color: 0x777777 });
-                mesh = new THREE.Mesh(geometry, material);
-            } else if (type.includes('cannon')) {
-                geometry = new THREE.CylinderGeometry(0.2, 0.3, 1.5);
-                material = new THREE.MeshStandardMaterial({ color: 0x222222 });
-                mesh = new THREE.Mesh(geometry, material);
-                mesh.rotation.x = Math.PI / 2;
-            } else {
-                geometry = new THREE.SphereGeometry(0.3);
-                material = new THREE.MeshStandardMaterial({ color: 0x111111 });
-                mesh = new THREE.Mesh(geometry, material);
-            }
-            return mesh;
-        }
-
-        /* =========================================
-           LOGIQUE DU JEU
-           ========================================= */
-
-        function buildWorld() {
-            playerShip = loadedAssets.player.clone();
-            playerShip.scale.set(1.5, 1.5, 1.5);
-            if (!playerShip.geometry) playerShip.rotation.y = Math.PI; 
-            
-            // Écume pour le joueur
-            addFoam(playerShip, 2.5);
-
-            playerCannon = loadedAssets.cannon.clone();
-            playerCannon.scale.set(0.8, 0.8, 0.8);
-            playerCannon.position.set(0, 1.2, 3); 
-            if(!playerCannon.geometry) playerCannon.rotation.y = Math.PI; 
-            
-            playerShip.add(playerCannon);
+        function createPlayerShip() {
+            playerShip = buildShipMesh(1, 0x5c3a21, 0xf4f4f4, false);
             scene.add(playerShip);
-
-            const rockKeys = ['rockA', 'rockB', 'rockC', 'rockD'];
-            for (let i = 0; i < 60; i++) {
-                const key = rockKeys[Math.floor(Math.random() * rockKeys.length)];
-                const rock = loadedAssets[key].clone();
-                const angle = Math.random() * Math.PI * 2;
-                const dist = 70 + Math.random() * 400;
-                
-                rock.position.set(Math.cos(angle) * dist, -0.5, Math.sin(angle) * dist);
-                const s = 4 + Math.random() * 6;
-                rock.scale.setScalar(s);
-                rock.rotation.y = Math.random() * Math.PI;
-                rock.userData.collisionRadius = s * 1.8; 
-                
-                // Écume pour les rochers
-                addFoam(rock, s * 0.8);
-
-                scene.add(rock);
-                rocks.push(rock);
-            }
         }
 
-        function startGame(min, max) {
-            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-            minTable = min;
-            maxTable = max;
-            score = 0;
-            timeRemaining = gameDuration;
-            isGameRunning = true;
-            
-            updateHUD();
-            document.getElementById('start-screen').style.display = 'none';
-            document.getElementById('game-over-screen').style.display = 'none';
-            document.getElementById('ui-container').style.display = 'block';
-            
-            // Reset position joueur
-            playerShip.position.set(0,0,0);
-            playerShip.rotation.set(0, Math.PI, 0);
-            playerStats.speed = 0;
-
-            newQuestion();
+        function createEnemyShip(x, z, numberValue) {
+            const enemy = buildShipMesh(0.7, 0x222222, 0xaa0000, true);
+            enemy.position.set(x, 0, z);
+            const label = createNumberLabel(numberValue);
+            label.position.set(0, 20, 0); 
+            enemy.add(label);
+            scene.add(enemy);
+            enemy.userData.target = new THREE.Vector3(x, 0, z);
+            enemy.userData.nextMoveTime = 0;
+            enemy.userData.value = numberValue;
+            return enemy;
         }
 
-        function endGame() {
-            isGameRunning = false;
-            document.getElementById('ui-container').style.display = 'none';
-            document.getElementById('game-over-screen').style.display = 'flex';
-            document.getElementById('final-score').innerText = score;
-        }
-
-        function newQuestion() {
-            // Nettoyage ennemis et mousses associées
-            enemies.forEach(e => {
-                scene.remove(e);
-                // On pourrait nettoyer foams ici mais c'est un enfant de l'objet, donc supprimé avec
-            });
-            enemies = [];
-            // On filtre la liste globale des mousses pour retirer celles des ennemis disparus
-            foams = foams.filter(f => f.parent !== null && f.parent.parent !== null);
-
-            currentQuestion.a = Math.floor(Math.random() * (maxTable - minTable + 1)) + minTable;
-            currentQuestion.b = Math.floor(Math.random() * 9) + 2;
-            currentQuestion.ans = currentQuestion.a * currentQuestion.b;
-
-            document.getElementById('question-panel').innerText = `${currentQuestion.a} x ${currentQuestion.b} = ?`;
-
-            let answers = [currentQuestion.ans];
-            while (answers.length < 3) {
-                let fake = currentQuestion.ans + Math.floor(Math.random() * 10) - 5;
-                if (fake > 0 && !answers.includes(fake)) answers.push(fake);
-            }
-            answers.sort(() => Math.random() - 0.5);
-
-            answers.forEach((val, i) => {
-                const enemyContainer = new THREE.Object3D();
-                
-                const angle = (Math.PI * 2 / answers.length) * i + Math.random();
-                const dist = 70 + Math.random() * 20;
-                
-                enemyContainer.position.x = playerShip.position.x + Math.sin(angle) * dist;
-                enemyContainer.position.z = playerShip.position.z + Math.cos(angle) * dist;
-                
-                const model = loadedAssets.enemy.clone();
-                enemyContainer.add(model);
-
-                // Écume pour l'ennemi
-                addFoam(enemyContainer, 3.5);
-
-                enemyContainer.userData = { 
-                    value: val, 
-                    correct: (val === currentQuestion.ans),
-                    velocity: new THREE.Vector3(Math.random()-0.5, 0, Math.random()-0.5).normalize().multiplyScalar(0.05),
-                    state: 'wander'
-                };
-                
-                const sprite = createTextSprite(val.toString());
-                sprite.position.set(0, 20, 0); 
-                enemyContainer.add(sprite);
-                
-                scene.add(enemyContainer);
-                enemies.push(enemyContainer);
-            });
-        }
-
-        function createTextSprite(text) {
+        function createNumberLabel(number) {
             const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 64;
             const ctx = canvas.getContext('2d');
-            canvas.width = 256; canvas.height = 128;
-            ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
-            ctx.fillRect(10, 10, 236, 108);
-            ctx.strokeStyle = "#fbbf24";
-            ctx.lineWidth = 8;
-            ctx.strokeRect(10, 10, 236, 108);
-            ctx.font = "Bold 85px Arial";
-            ctx.fillStyle = "white";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(text, 128, 64);
+            ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 128, 64);
+            ctx.fillStyle = "#000"; ctx.font = "bold 40px Arial"; ctx.textAlign = "center";
+            ctx.fillText(number, 64, 45);
             const texture = new THREE.CanvasTexture(canvas);
             const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
-            sprite.scale.set(12, 6, 1);
+            sprite.scale.set(10, 5, 1);
             return sprite;
         }
 
-        function fireCannon() {
-            if(!isGameRunning) return;
-            playSound('shoot'); 
-            const ball = loadedAssets.ball.clone();
-            ball.scale.set(4, 4, 4);
-            const startPos = new THREE.Vector3(0, 2, 5).applyMatrix4(playerShip.matrixWorld);
-            ball.position.copy(startPos);
+        // --- Îles et Environnement ---
+
+        function createIsland(x, z, scale) {
+            const group = new THREE.Group();
+            const sand = new THREE.Mesh(new THREE.CylinderGeometry(8 * scale, 10 * scale, 3, 12), new THREE.MeshToonMaterial({ color: 0xffcc66 }));
+            sand.position.y = -0.5;
+            group.add(sand);
+
+            const palmCount = 1 + Math.floor(Math.random() * 4);
+            for(let p = 0; p < palmCount; p++) {
+                const palm = new THREE.Group();
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3*scale, 0.5*scale, 8*scale, 8), new THREE.MeshToonMaterial({color:0x8b4513}));
+                trunk.position.y = 4*scale; palm.add(trunk);
+                for(let i=0; i<5; i++) {
+                    const leaf = new THREE.Mesh(new THREE.SphereGeometry(2.5*scale, 8, 4), new THREE.MeshToonMaterial({color:0x2e7d32}));
+                    leaf.scale.set(1.5, 0.1, 0.4); leaf.position.y = 8*scale;
+                    leaf.rotation.y = (i/5)*Math.PI*2; leaf.rotation.z = 0.5; palm.add(leaf);
+                }
+                const a = Math.random()*Math.PI*2; const d = Math.random()*5*scale;
+                palm.position.set(Math.cos(a)*d, 0, Math.sin(a)*d);
+                group.add(palm);
+            }
+            group.position.set(x, 0, z);
+            group.userData = { radius: 10 * scale };
+            scene.add(group);
+            islands.push(group);
+        }
+
+        function createWorldIslands() {
+            for(let i=0; i<25; i++) {
+                const a = Math.random()*Math.PI*2; const d = 150 + Math.random()*1000;
+                createIsland(Math.cos(a)*d, Math.sin(a)*d, 0.8 + Math.random()*1.5);
+            }
+        }
+
+        // --- Logic ---
+
+        function spawnWave() {
+            enemyShips.forEach(e => scene.remove(e));
+            enemyShips = [];
+
+            const t = Math.floor(Math.random() * 8) + 2;
+            const m = Math.floor(Math.random() * 9) + 1;
+            currentResult = t * m;
+            document.getElementById('question-display').innerText = `${t} x ${m} = ?`;
+
+            let answers = [currentResult];
+            while(answers.length < 3) {
+                let f = currentResult + (Math.floor(Math.random()*10)-5);
+                if(f > 0 && !answers.includes(f)) answers.push(f);
+            }
+            answers.sort(() => Math.random() - 0.5);
+
+            // PLUS PROCHE : 60 à 100 unités au lieu de 150+
+            answers.forEach(ans => {
+                const a = Math.random()*Math.PI*2;
+                const d = 70 + Math.random()*40; 
+                enemyShips.push(createEnemyShip(playerShip.position.x + Math.cos(a)*d, playerShip.position.z + Math.sin(a)*d, ans));
+            });
+        }
+
+        function createExplosion(pos) {
+            playExplosionSound();
+            const m = new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), new THREE.MeshBasicMaterial({color:0xffaa00, transparent:true}));
+            m.position.copy(pos); scene.add(m);
+            explosions.push({mesh:m, scale:1, opacity:1});
+        }
+
+        function createWakeParticle() {
+            if(Math.abs(shipPhys.speed) < 0.1) return;
+            const geo = new THREE.SphereGeometry(0.5 + Math.random(), 6, 6);
+            const mat = new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.6});
+            const p = new THREE.Mesh(geo, mat);
+            // Position à l'arrière du bateau
+            const back = new THREE.Vector3(0, 0, 5).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerShip.rotation.y);
+            p.position.copy(playerShip.position).add(back);
+            p.position.y = 0.1;
+            scene.add(p);
+            shipWake.push({mesh: p, life: 1, scale: 1});
+        }
+
+        function createFoamCircle() {
+            const geo = new THREE.TorusGeometry(5, 0.1, 8, 32);
+            const mat = new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.5});
+            const circle = new THREE.Mesh(geo, mat);
+            circle.rotation.x = Math.PI / 2;
+            circle.position.copy(playerShip.position);
+            circle.position.y = 0.05;
+            scene.add(circle);
+            foamCircles.push({mesh: circle, life: 1, scale: 1});
+        }
+
+        // --- Contrôles ---
+
+        function handleKey(e, isDown) {
+            if(e.code === 'ArrowUp') input.up = isDown;
+            if(e.code === 'ArrowDown') input.down = isDown;
+            if(e.code === 'ArrowLeft') input.left = isDown;
+            if(e.code === 'ArrowRight') input.right = isDown;
+            if(e.code === 'Space' && isDown) shoot();
             
-            const velocity = new THREE.Vector3(0, 0, 2.5).applyQuaternion(playerShip.quaternion);
-            ball.userData = { velocity: velocity, life: 120 };
+            const btnMap = {'ArrowUp':'btn-up','ArrowDown':'btn-down','ArrowLeft':'btn-left','ArrowRight':'btn-right'};
+            if(btnMap[e.code]) {
+                const el = document.getElementById(btnMap[e.code]);
+                if(isDown) el.classList.add('pressed'); else el.classList.remove('pressed');
+            }
+        }
+
+        window.shoot = function(e) {
+            if(e) e.stopPropagation();
+            if(!gameActive) return;
+            playShootSound();
+            const ball = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8), new THREE.MeshBasicMaterial({color:0x111111}));
+            ball.position.copy(playerShip.position).add(new THREE.Vector3(0, 3, 0));
+            const fwd = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerShip.rotation.y);
+            ball.position.add(fwd.clone().multiplyScalar(6));
+            cannonballs.push({ mesh: ball, velocity: fwd.multiplyScalar(3.5), life: 70 });
             scene.add(ball);
-            projectiles.push(ball);
-        }
+            shipPhys.speed -= 0.05; 
+        };
 
-        function checkCollisions() {
-            for (let rock of rocks) {
-                const dist = playerShip.position.distanceTo(rock.position);
-                if (dist < rock.userData.collisionRadius + playerStats.radius) {
-                    const dir = new THREE.Vector3().subVectors(playerShip.position, rock.position).normalize();
-                    playerShip.position.add(dir.multiplyScalar(0.5));
-                    playerStats.speed *= -0.5; 
-                    return true;
+        window.changeCamera = function(e) {
+            if(e) e.stopPropagation();
+            currentCamMode = (currentCamMode + 1) % 3;
+            document.getElementById('crosshair').style.display = (currentCamMode === 1) ? 'block' : 'none';
+        };
+
+        // --- Boucle ---
+
+        function animate() {
+            if(!gameActive) return;
+            requestAnimationFrame(animate);
+            const now = performance.now();
+            const delta = (now - lastTime) / 1000;
+            lastTime = now;
+            const time = now * 0.001;
+
+            timeRemaining -= delta;
+            document.getElementById('timer-bar').style.transform = `scaleX(${Math.max(0, timeRemaining/gameTime)})`;
+            if(timeRemaining <= 0) {
+                gameActive = false;
+                document.getElementById('end-screen').style.display = 'flex';
+                document.getElementById('final-score').innerText = `Score Final: ${score}`;
+                return;
+            }
+
+            // Physics
+            if(input.up) shipPhys.speed += shipPhys.acceleration;
+            if(input.down) shipPhys.speed -= shipPhys.acceleration;
+            shipPhys.speed *= shipPhys.friction;
+            if(Math.abs(shipPhys.speed) > 0.01) {
+                if(input.left) shipPhys.rotation += shipPhys.turnSpeed;
+                if(input.right) shipPhys.rotation -= shipPhys.turnSpeed;
+            }
+            playerShip.rotation.y = shipPhys.rotation;
+            const fwd = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), shipPhys.rotation);
+            playerShip.position.add(fwd.multiplyScalar(shipPhys.speed));
+            if(shipWheel) shipWheel.rotation.z = THREE.MathUtils.lerp(shipWheel.rotation.z, input.left?1:(input.right?-1:0), 0.1);
+
+            // Collisions
+            islands.forEach(isl => {
+                if(playerShip.position.distanceTo(isl.position) < isl.userData.radius + 5) {
+                    const p = new THREE.Vector3().subVectors(playerShip.position, isl.position).normalize();
+                    playerShip.position.add(p.multiplyScalar(0.5)); shipPhys.speed *= -0.4;
                 }
+            });
+
+            // Effects
+            if(Math.random() > 0.7) createWakeParticle();
+            if(Math.abs(shipPhys.speed) > 0.1 && Math.random() > 0.96) createFoamCircle();
+
+            // Wake & Foam update
+            for(let i=shipWake.length-1; i>=0; i--) {
+                const w = shipWake[i]; w.life -= 0.02; w.scale += 0.05;
+                w.mesh.scale.setScalar(w.scale); w.mesh.material.opacity = w.life;
+                if(w.life <= 0) { scene.remove(w.mesh); shipWake.splice(i, 1); }
             }
-            
-            for (let enemy of enemies) {
-                const dist = playerShip.position.distanceTo(enemy.position);
-                if (dist < 8 + playerStats.radius) {
-                    const dir = new THREE.Vector3().subVectors(playerShip.position, enemy.position).normalize();
-                    playerShip.position.add(dir.multiplyScalar(1.5)); 
-                    playerStats.speed = -0.3; 
-                    return true;
+            for(let i=foamCircles.length-1; i>=0; i--) {
+                const f = foamCircles[i]; f.life -= 0.01; f.scale += 0.1;
+                f.mesh.scale.setScalar(f.scale); f.mesh.material.opacity = f.life;
+                if(f.life <= 0) { scene.remove(f.mesh); foamCircles.splice(i, 1); }
+            }
+
+            // Enemies
+            enemyShips.forEach(e => {
+                e.position.y = Math.sin(time*2 + e.position.x)*0.3;
+                if(playerShip.position.distanceTo(e.position) < 10) {
+                    const p = new THREE.Vector3().subVectors(playerShip.position, e.position).normalize();
+                    playerShip.position.add(p); shipPhys.speed *= -0.5;
                 }
-            }
-            return false;
-        }
+            });
 
-        function update(timeNow) {
-            const time = timeNow * 0.001; 
-            const delta = timeNow - lastTime;
-            lastTime = timeNow;
-
-            // --- GESTION DU TIMER ---
-            if (isGameRunning) {
-                timeRemaining -= delta / 1000;
-                if (timeRemaining <= 0) {
-                    timeRemaining = 0;
-                    endGame();
-                }
-                // Mise à jour visuelle Timer
-                const pct = (timeRemaining / gameDuration) * 100;
-                document.getElementById('timer-bar').style.width = pct + '%';
-                // Formatage min:sec
-                const m = Math.floor(timeRemaining / 60);
-                const s = Math.floor(timeRemaining % 60);
-                document.getElementById('timer-text').innerText = 
-                    (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
-            }
-
-            // --- ANIMATION EAU (2 Bleus + Écume) ---
-            if (waterMesh) {
-                const positions = waterMesh.geometry.attributes.position.array;
-                const colors = waterMesh.geometry.attributes.color.array;
-                const count = positions.length / 3;
-
-                // Couleurs
-                const cDeep = new THREE.Color(0x0077be); // Bleu profond
-                const cFoam = new THREE.Color(0xaaddff); // Bleu très clair (écume)
-
-                for (let i = 0; i < count; i++) {
-                    const x = positions[i * 3];
-                    const y = positions[i * 3 + 1]; // Y local (Z monde avant rotation)
-                    
-                    // Calcul hauteur vague
-                    const wave1 = Math.sin(x * 0.05 + time) * 0.2;
-                    const wave2 = Math.cos(y * 0.03 + time * 0.8) * 0.2;
-                    const h = wave1 + wave2; // Hauteur résultante
-                    
-                    positions[i * 3 + 2] = h;
-
-                    // Application Couleur : Si c'est un pic (> 0.25), c'est de l'écume
-                    let finalColor;
-                    if (h > 0.15) {
-                        finalColor = cFoam;
-                    } else {
-                        finalColor = cDeep;
-                    }
-
-                    colors[i * 3] = finalColor.r;
-                    colors[i * 3 + 1] = finalColor.g;
-                    colors[i * 3 + 2] = finalColor.b;
-                }
-                waterMesh.geometry.attributes.position.needsUpdate = true;
-                waterMesh.geometry.attributes.color.needsUpdate = true;
-            }
-
-            // --- ANIMATION ÉCUME AUTOUR DES BATEAUX ---
-            updateFoam(time);
-
-            if (!playerShip) return;
-
-            // Contrôles Joueur
-            if (isGameRunning) {
-                if (keys.ArrowUp) playerStats.speed += playerStats.acc;
-                if (keys.ArrowDown) playerStats.speed -= playerStats.acc;
-                if (keys.ArrowLeft) playerShip.rotation.y += playerStats.turnSpeed;
-                if (keys.ArrowRight) playerShip.rotation.y -= playerStats.turnSpeed;
-            }
-            playerStats.speed *= 0.98;
-            playerStats.speed = Math.max(Math.min(playerStats.speed, playerStats.maxSpeed), -0.2);
-            playerShip.translateZ(playerStats.speed);
-            
-            checkCollisions();
-
-            playerShip.position.y = Math.sin(time * 1.0) * 0.1; 
-            playerShip.rotation.x = Math.sin(time * 0.6) * 0.02;
-            playerShip.rotation.z = Math.cos(time * 0.4) * 0.01;
-
-            // IA Ennemis
-            if (isGameRunning) {
-                const minRadius = 40;
-                const maxRadius = 90;
-                enemies.forEach(enemy => {
-                    const dist = enemy.position.distanceTo(playerShip.position);
-                    const dirToPlayer = new THREE.Vector3().subVectors(playerShip.position, enemy.position).normalize();
-                    let steering = new THREE.Vector3(0,0,0);
-
-                    if (dist > maxRadius) steering.add(dirToPlayer.multiplyScalar(0.002));
-                    else if (dist < minRadius) steering.sub(dirToPlayer.multiplyScalar(0.003));
-                    else {
-                        steering.x += (Math.random() - 0.5) * 0.002;
-                        steering.z += (Math.random() - 0.5) * 0.002;
-                    }
-                    
-                    for (let rock of rocks) {
-                        const distToRock = enemy.position.distanceTo(rock.position);
-                        if (distToRock < rock.userData.collisionRadius + 8) {
-                            const pushDir = new THREE.Vector3().subVectors(enemy.position, rock.position).normalize();
-                            steering.add(pushDir.multiplyScalar(0.01));
-                            enemy.position.add(pushDir.multiplyScalar(0.1));
-                        }
-                    }
-
-                    enemy.userData.velocity.add(steering);
-                    enemy.userData.velocity.clampLength(0, 0.08); 
-                    enemy.position.add(enemy.userData.velocity);
-                    const lookTarget = enemy.position.clone().add(enemy.userData.velocity);
-                    enemy.lookAt(lookTarget);
-                    enemy.position.y = Math.sin(time * 1.2 + (enemy.id||0)) * 0.1;
-                });
-            }
-
-            // Projectiles
-            for (let i = projectiles.length - 1; i >= 0; i--) {
-                const p = projectiles[i];
-                p.position.add(p.userData.velocity);
-                p.userData.life--;
-                p.position.y -= 0.03; 
-
-                if(p.position.y < -2) {
-                     scene.remove(p);
-                     projectiles.splice(i, 1);
-                     continue;
-                }
-
+            // Cannonballs
+            for(let i=cannonballs.length-1; i>=0; i--) {
+                const b = cannonballs[i]; b.mesh.position.add(b.velocity); b.life--;
                 let hit = false;
-                for (let j = enemies.length - 1; j >= 0; j--) {
-                    const enemy = enemies[j];
-                    if (p.position.distanceTo(enemy.position) < 8) {
-                        spawnExplosion(enemy.position.clone()); 
-                        playSound('explosion'); 
-                        handleCollision(enemy);
-                        hit = true;
-                        break;
+                for(let j=enemyShips.length-1; j>=0; j--) {
+                    const e = enemyShips[j];
+                    if(b.mesh.position.distanceTo(e.position) < 8) {
+                        createExplosion(e.position);
+                        if(e.userData.value === currentResult) {
+                            score += 10; showFeedback("BRAVO ! +10", "#00ff00");
+                            enemyShips.forEach(es => { createExplosion(es.position); scene.remove(es); });
+                            enemyShips = []; setTimeout(spawnWave, 800);
+                        } else {
+                            score -= 5; showFeedback("ERREUR ! -5", "#ff4444");
+                            scene.remove(e); enemyShips.splice(j, 1);
+                        }
+                        hit = true; break;
                     }
                 }
-                if (hit || p.userData.life <= 0) {
-                    scene.remove(p);
-                    projectiles.splice(i, 1);
+                if(hit || b.life <= 0) { scene.remove(b.mesh); cannonballs.splice(i, 1); }
+            }
+
+            // Explosions
+            for(let i=explosions.length-1; i>=0; i--) {
+                const ex = explosions[i]; ex.scale += 0.4; ex.opacity -= 0.04;
+                ex.mesh.scale.setScalar(ex.scale); ex.mesh.material.opacity = ex.opacity;
+                if(ex.opacity <= 0) { scene.remove(ex.mesh); explosions.splice(i, 1); }
+            }
+
+            // Camera
+            const offset = new THREE.Vector3();
+            const lookAt = playerShip.position.clone();
+            if(currentCamMode === 0) offset.set(0, 100, 40);
+            else if(currentCamMode === 1) {
+                const f = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerShip.rotation.y);
+                camera.position.copy(playerShip.position).add(new THREE.Vector3(0, 6, 0)).add(f.multiplyScalar(2));
+                camera.lookAt(playerShip.position.clone().add(f.multiplyScalar(100)));
+            } else {
+                const b = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerShip.rotation.y);
+                offset.copy(b).multiplyScalar(35).add(new THREE.Vector3(0, 18, 0));
+                lookAt.y += 5;
+            }
+            if(currentCamMode !== 1) {
+                camera.position.lerp(playerShip.position.clone().add(offset), 0.1);
+                camera.lookAt(lookAt);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function createClouds() {
+            for (let i = 0; i < 30; i++) {
+                const g = new THREE.Group();
+                for(let j=0; j<3; j++) {
+                    const s = new THREE.Mesh(new THREE.SphereGeometry(8, 8, 8), new THREE.MeshToonMaterial({color:0xffffff}));
+                    s.position.set(j*8, Math.random()*5, 0); g.add(s);
                 }
+                g.position.set((Math.random()-0.5)*1500, 60+Math.random()*40, (Math.random()-0.5)*1500);
+                scene.add(g); clouds.push(g);
             }
-
-            updateParticles();
-            updateCamera();
         }
 
-        function handleCollision(enemy) {
-            if (enemy.userData.correct) {
-                showFeedback("CORRECT ! +10", "#4ade80");
-                score += 10;
-                newQuestion();
-            } else {
-                showFeedback("ERREUR ! -5", "#ef4444");
-                score = Math.max(0, score - 5);
-                scene.remove(enemy);
-                enemies = enemies.filter(e => e !== enemy);
-                if (enemies.length === 0) newQuestion();
-            }
-            updateHUD();
-        }
-
-        function showFeedback(text, color) {
-            const msg = document.getElementById('feedback-msg');
-            msg.innerText = text;
-            msg.style.color = color;
-            msg.style.display = 'block';
-            setTimeout(() => { msg.style.display = 'none'; }, 1200);
-        }
-
-        function updateHUD() {
-            document.getElementById('score').innerText = score;
-        }
-
-        function updateCamera() {
-            const mode = cameraModes[cameraIndex];
-            const crosshair = document.getElementById('crosshair');
-            
-            if (cameraIndex === 2) {
-                crosshair.style.display = 'block';
-            } else {
-                crosshair.style.display = 'none';
-            }
-
-            const offset = mode.offset.clone();
-            offset.applyQuaternion(playerShip.quaternion);
-            
-            const targetPos = playerShip.position.clone().add(offset);
-            camera.position.lerp(targetPos, 0.1);
-            
-            const lookOffset = mode.lookAt.clone();
-            lookOffset.applyQuaternion(playerShip.quaternion);
-            
-            camera.lookAt(playerShip.position.clone().add(lookOffset));
-        }
-
-        function switchCamera() {
-            cameraIndex = (cameraIndex + 1) % cameraModes.length;
-            document.getElementById('camera-panel').innerText = "Caméra : " + cameraModes[cameraIndex].name + " (Touche C)";
-        }
-
-        function onKeyDown(event) {
-            if (event.code in keys) keys[event.code] = true;
-            if (event.code === 'Space') fireCannon();
-            if (event.code === 'KeyC') switchCamera();
-        }
-
-        function onKeyUp(event) {
-            if (event.code in keys) keys[event.code] = false;
+        function showFeedback(txt, col) {
+            const el = document.getElementById('feedback-text');
+            el.innerText = txt; el.style.color = col; el.style.opacity = 1;
+            setTimeout(() => el.style.opacity = 0, 1000);
+            document.getElementById('score-display').innerText = "PTS: " + score;
         }
 
         function onWindowResize() {
@@ -905,14 +615,6 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
-
-        function animate(time) {
-            requestAnimationFrame(animate);
-            update(time);
-            renderer.render(scene, camera);
-        }
-
-        init();
     </script>
 </body>
 </html>
