@@ -181,11 +181,13 @@
         let loadedAssets = {}; 
         let manager;
         let waterMesh;
+        let audioCtx; // Contexte audio
         
         // Entités du jeu
         let playerShip, playerCannon;
         let enemies = [];
         let projectiles = [];
+        let particles = []; // Particules d'explosion
         let rocks = [];
         
         // Variables de jeu
@@ -203,11 +205,100 @@
         const cameraModes = [
             // Arrière
             { name: "Arrière Haute", offset: new THREE.Vector3(0, 25, -35), lookAt: new THREE.Vector3(0, 5, 10) },
-            // Aérienne (En biais)
+            // Aérienne (En biais mais derrière le bateau)
             { name: "Aérienne", offset: new THREE.Vector3(0, 70, -40), lookAt: new THREE.Vector3(0, 0, 20) },
             // Proue
             { name: "Proue (Capitaine)", offset: new THREE.Vector3(0, 4, 8), lookAt: new THREE.Vector3(0, 2, 50) }
         ];
+
+        /* =========================================
+           SYSTÈME AUDIO (Simple Synth)
+           ========================================= */
+        function initAudio() {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            } catch(e) { console.warn("AudioContext non supporté"); }
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            // Reprendre le contexte s'il est suspendu (comportement navigateur)
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'shoot') {
+                // Son de canon : Bruit sourd descendant
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+                gain.gain.setValueAtTime(0.5, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'explosion') {
+                // Son d'explosion : Bruit blanc (simulation avec dents de scie basse fréquence + modulation)
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, now);
+                osc.frequency.exponentialRampToValueAtTime(10, now + 0.5);
+                gain.gain.setValueAtTime(0.8, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            }
+        }
+
+        /* =========================================
+           PARTICULES (Explosions)
+           ========================================= */
+        function spawnExplosion(position) {
+            const particleCount = 20;
+            const geometry = new THREE.TetrahedronGeometry(1.5, 0); 
+            // Matériaux : Orange et Rouge
+            const mat1 = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+            const mat2 = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+
+            for (let i = 0; i < particleCount; i++) {
+                const mesh = new THREE.Mesh(geometry, Math.random() > 0.5 ? mat1 : mat2);
+                mesh.position.copy(position);
+                
+                // Dispersion aléatoire
+                mesh.position.x += (Math.random() - 0.5) * 4;
+                mesh.position.y += (Math.random() - 0.5) * 4;
+                mesh.position.z += (Math.random() - 0.5) * 4;
+
+                const velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.8,
+                    (Math.random()) * 0.8 + 0.2, // Vers le haut
+                    (Math.random() - 0.5) * 0.8
+                );
+
+                scene.add(mesh);
+                particles.push({ mesh: mesh, velocity: velocity, life: 1.0 });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.life -= 0.02;
+                p.mesh.position.add(p.velocity);
+                p.mesh.rotation.x += 0.1;
+                p.mesh.rotation.z += 0.1;
+                p.velocity.y -= 0.02; // Gravité
+                p.mesh.scale.setScalar(p.life);
+
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    particles.splice(i, 1);
+                }
+            }
+        }
 
         /* =========================================
            INITIALISATION & CHARGEMENT
@@ -240,8 +331,7 @@
             sunLight.shadow.mapSize.height = 2048;
             scene.add(sunLight);
 
-            // --- EAU AMÉLIORÉE ---
-            // On augmente la définition pour plus d'effets de surface
+            // --- EAU AMÉLIORÉE (Stable mais vivante) ---
             const waterGeo = new THREE.PlaneGeometry(3000, 3000, 64, 64); 
             const waterMat = new THREE.MeshPhongMaterial({ 
                 color: 0x0077be, // Bleu mer profond
@@ -260,7 +350,9 @@
             window.addEventListener('resize', onWindowResize, false);
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('click', () => { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); }); // Démarrer audio au clic
 
+            initAudio();
             loadAllAssets();
         }
 
@@ -379,6 +471,7 @@
         }
 
         function startGame(min, max) {
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
             minTable = min;
             maxTable = max;
             score = 0;
@@ -408,7 +501,7 @@
             answers.forEach((val, i) => {
                 const enemyContainer = new THREE.Object3D();
                 
-                // Positionnement aléatoire autour du joueur (Distance moyenne)
+                // Positionnement aléatoire autour du joueur
                 const angle = (Math.PI * 2 / answers.length) * i + Math.random();
                 const dist = 70 + Math.random() * 20;
                 
@@ -416,18 +509,14 @@
                 enemyContainer.position.z = playerShip.position.z + Math.cos(angle) * dist;
                 
                 const model = loadedAssets.enemy.clone();
-                // CORRECTION : On ne tourne PLUS le modèle de 180° s'il reculait
-                // On laisse l'orientation par défaut ou on l'ajuste si nécessaire
-                // Si le modèle OBJ est standard, il regarde souvent vers +Z ou -Z.
-                // On assume ici qu'il faut l'orienter normalement.
                 enemyContainer.add(model);
 
-                // Initialisation de la vélocité pour mouvement fluide
+                // Initialisation de la vélocité
                 enemyContainer.userData = { 
                     value: val, 
                     correct: (val === currentQuestion.ans),
                     velocity: new THREE.Vector3(Math.random()-0.5, 0, Math.random()-0.5).normalize().multiplyScalar(0.05),
-                    state: 'wander' // wander, chase, avoid
+                    state: 'wander'
                 };
                 
                 // Étiquette nombre
@@ -461,6 +550,7 @@
         }
 
         function fireCannon() {
+            playSound('shoot'); // Son de tir
             const ball = loadedAssets.ball.clone();
             ball.scale.set(4, 4, 4);
             const startPos = new THREE.Vector3(0, 2, 5).applyMatrix4(playerShip.matrixWorld);
@@ -473,6 +563,7 @@
         }
 
         function checkCollisions() {
+            // Collision Joueur - Rochers
             for (let rock of rocks) {
                 const dist = playerShip.position.distanceTo(rock.position);
                 if (dist < rock.userData.collisionRadius + playerStats.radius) {
@@ -483,6 +574,7 @@
                 }
             }
             
+            // Collision Joueur - Ennemis
             for (let enemy of enemies) {
                 const dist = playerShip.position.distanceTo(enemy.position);
                 if (dist < 8 + playerStats.radius) {
@@ -498,18 +590,17 @@
         function update() {
             const time = performance.now() * 0.001; 
 
-            // --- Animation Eau (Plus complexe pour effet "vivant") ---
+            // --- Animation Eau (Faible variation de hauteur) ---
             if (waterMesh) {
                 const positions = waterMesh.geometry.attributes.position.array;
                 const count = positions.length / 3;
                 for (let i = 0; i < count; i++) {
                     const x = positions[i * 3];
                     const y = positions[i * 3 + 1]; 
-                    // Superposition de deux ondes pour un effet plus naturel et aléatoire
-                    const wave1 = Math.sin(x * 0.05 + time) * 1.5;
-                    const wave2 = Math.cos(y * 0.03 + time * 0.8) * 1.5;
-                    // Petit bruit pour casser la régularité
-                    const noise = Math.sin(x * 0.1 + y * 0.1 + time * 1.5) * 0.5;
+                    // Amplitude très faible (0.2) pour garder l'eau presque plate mais animée
+                    const wave1 = Math.sin(x * 0.05 + time) * 0.2;
+                    const wave2 = Math.cos(y * 0.03 + time * 0.8) * 0.2;
+                    const noise = Math.sin(x * 0.1 + y * 0.1 + time * 1.5) * 0.1;
                     
                     positions[i * 3 + 2] = wave1 + wave2 + noise;
                 }
@@ -530,49 +621,47 @@
             playerShip.translateZ(playerStats.speed);
             checkCollisions();
 
-            playerShip.position.y = Math.sin(time * 1.0) * 0.2; 
+            playerShip.position.y = Math.sin(time * 1.0) * 0.1; 
             playerShip.rotation.x = Math.sin(time * 0.6) * 0.02;
             playerShip.rotation.z = Math.cos(time * 0.4) * 0.01;
 
-            // --- IA Ennemis (Navigation en cercle) ---
+            // --- IA Ennemis ---
             const minRadius = 40;
             const maxRadius = 90;
 
             enemies.forEach(enemy => {
+                // 1. Navigation (Comportement)
                 const dist = enemy.position.distanceTo(playerShip.position);
                 const dirToPlayer = new THREE.Vector3().subVectors(playerShip.position, enemy.position).normalize();
-                
-                // Forces de direction
                 let steering = new THREE.Vector3(0,0,0);
 
-                if (dist > maxRadius) {
-                    // Trop loin : revenir vers le joueur
-                    steering.add(dirToPlayer.multiplyScalar(0.002));
-                } else if (dist < minRadius) {
-                    // Trop près : s'éloigner
-                    steering.sub(dirToPlayer.multiplyScalar(0.003));
-                } else {
-                    // Zone idéale : navigation tangentielle/aléatoire
-                    // Petit bruit aléatoire pour changer de direction doucement
+                if (dist > maxRadius) steering.add(dirToPlayer.multiplyScalar(0.002));
+                else if (dist < minRadius) steering.sub(dirToPlayer.multiplyScalar(0.003));
+                else {
                     steering.x += (Math.random() - 0.5) * 0.002;
                     steering.z += (Math.random() - 0.5) * 0.002;
                 }
+                
+                // 2. Évitement des îles (Collisions Ennemis - Rochers)
+                for (let rock of rocks) {
+                    const distToRock = enemy.position.distanceTo(rock.position);
+                    // Rayon de collision ennemi ~8
+                    if (distToRock < rock.userData.collisionRadius + 8) {
+                        const pushDir = new THREE.Vector3().subVectors(enemy.position, rock.position).normalize();
+                        // Force de repoussement forte
+                        steering.add(pushDir.multiplyScalar(0.01));
+                        // Déplacement immédiat pour éviter de rester coincé
+                        enemy.position.add(pushDir.multiplyScalar(0.1));
+                    }
+                }
 
-                // Appliquer la force à la vélocité
                 enemy.userData.velocity.add(steering);
-                
-                // Limiter la vitesse
-                enemy.userData.velocity.clampLength(0, 0.08); // Vitesse max
-                
-                // Appliquer le mouvement
+                enemy.userData.velocity.clampLength(0, 0.08); 
                 enemy.position.add(enemy.userData.velocity);
 
-                // Orienter le bateau dans le sens de son déplacement (LookAt velocity)
                 const lookTarget = enemy.position.clone().add(enemy.userData.velocity);
                 enemy.lookAt(lookTarget);
-
-                // Tangage ennemi
-                enemy.position.y = Math.sin(time * 1.2 + (enemy.id||0)) * 0.15;
+                enemy.position.y = Math.sin(time * 1.2 + (enemy.id||0)) * 0.1;
             });
 
             // Projectiles
@@ -592,6 +681,8 @@
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     const enemy = enemies[j];
                     if (p.position.distanceTo(enemy.position) < 8) {
+                        spawnExplosion(enemy.position.clone()); // Effet particule
+                        playSound('explosion'); // Son d'explosion
                         handleCollision(enemy);
                         hit = true;
                         break;
@@ -602,6 +693,8 @@
                     projectiles.splice(i, 1);
                 }
             }
+
+            updateParticles(); // Animation des explosions
             updateCamera();
         }
 
@@ -636,6 +729,7 @@
             const mode = cameraModes[cameraIndex];
             const crosshair = document.getElementById('crosshair');
             
+            // Affichage viseur seulement en vue Capitaine
             if (cameraIndex === 2) {
                 crosshair.style.display = 'block';
             } else {
@@ -643,15 +737,15 @@
             }
 
             const offset = mode.offset.clone();
-            if (cameraIndex !== 1) {
-                offset.applyQuaternion(playerShip.quaternion);
-            }
+            // Appliquer la rotation du bateau à TOUTES les caméras
+            // Cela permet à la caméra aérienne de rester derrière le bateau
+            offset.applyQuaternion(playerShip.quaternion);
             
             const targetPos = playerShip.position.clone().add(offset);
             camera.position.lerp(targetPos, 0.1);
             
             const lookOffset = mode.lookAt.clone();
-            if (cameraIndex !== 1) lookOffset.applyQuaternion(playerShip.quaternion);
+            lookOffset.applyQuaternion(playerShip.quaternion);
             
             camera.lookAt(playerShip.position.clone().add(lookOffset));
         }
@@ -687,3 +781,4 @@
     </script>
 </body>
 </html>
+
