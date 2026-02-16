@@ -50,7 +50,7 @@
         #crosshair {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 40px; height: 40px; border: 2px solid rgba(255,255,255,0.7);
-            border-radius: 50%; pointer-events: none; z-index: 50;
+            border-radius: 50%; pointer-events: none; z-index: 50; display: none;
         }
         #crosshair::before, #crosshair::after {
             content: ''; position: absolute; background: rgba(255,255,255,0.7);
@@ -197,8 +197,8 @@
         let cannonballs = [];
         let explosions = [];
         let shipWheel;
-        let shipWake = []; // Pour les particules de sillage
-        let foamCircles = []; // Pour les ronds d'écume
+        let shipWake = []; // Particules (bulles)
+        let bowWaves = []; // Vagues d'étrave (arcs)
 
         let gameActive = false;
         let score = 0;
@@ -209,7 +209,7 @@
 
         const input = { up: false, down: false, left: false, right: false };
         const shipPhys = { speed: 0, maxSpeed: 0.8, rotation: 0, turnSpeed: 0.03, acceleration: 0.01, friction: 0.98 };
-        let currentCamMode = 2; 
+        let currentCamMode = 2; // Défaut: vue 3ème personne
 
         // --- Initialisation ---
 
@@ -233,12 +233,15 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             document.body.appendChild(renderer.domElement);
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-            sun = new THREE.DirectionalLight(0xffffff, 0.8);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            sun = new THREE.DirectionalLight(0xffffff, 0.9);
             sun.position.set(200, 400, 200);
             sun.castShadow = true;
+            sun.shadow.mapSize.width = 2048;
+            sun.shadow.mapSize.height = 2048;
             sun.shadow.camera.left = -500; sun.shadow.camera.right = 500;
             sun.shadow.camera.top = 500; sun.shadow.camera.bottom = -500;
             scene.add(sun);
@@ -269,27 +272,33 @@
             hullBase.scale.set(1.2, 1.8, 2.6);
             hullBase.position.y = -0.5;
             hullBase.castShadow = true;
+            hullBase.receiveShadow = true;
             shipGroup.add(hullBase);
 
             const deck = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 1, 12), new THREE.MeshToonMaterial({ color: 0x8f6a4e }));
             deck.scale.set(1, 0.5, 2.5);
             deck.position.y = 2.5;
+            deck.castShadow = true;
+            deck.receiveShadow = true;
             shipGroup.add(deck);
 
             const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 18), new THREE.MeshToonMaterial({color: 0x2d1a0a}));
             mast.position.y = 8.5;
+            mast.castShadow = true;
             shipGroup.add(mast);
 
             // Vigie
             const nest = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.2, 1.8, 8), new THREE.MeshToonMaterial({color: 0x3d2516}));
             nest.position.y = 15.5;
+            nest.castShadow = true;
             shipGroup.add(nest);
 
             // Voile (Transparente)
-            const sailMat = new THREE.MeshToonMaterial({ color: sailColor, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+            const sailMat = new THREE.MeshToonMaterial({ color: sailColor, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
             const sail = new THREE.Mesh(new THREE.BoxGeometry(10, 11, 0.2), sailMat);
             sail.position.set(0, 9.5, 0.6);
             sail.rotation.x = 0.1;
+            sail.castShadow = true;
             shipGroup.add(sail);
 
             if(!isEnemy) {
@@ -326,13 +335,21 @@
         function createEnemyShip(x, z, numberValue) {
             const enemy = buildShipMesh(0.7, 0x222222, 0xaa0000, true);
             enemy.position.set(x, 0, z);
+            // Orientation aléatoire initiale
+            enemy.rotation.y = Math.random() * Math.PI * 2;
+            
             const label = createNumberLabel(numberValue);
             label.position.set(0, 20, 0); 
             enemy.add(label);
+            
             scene.add(enemy);
-            enemy.userData.target = new THREE.Vector3(x, 0, z);
-            enemy.userData.nextMoveTime = 0;
+            
+            // IA Data
             enemy.userData.value = numberValue;
+            enemy.userData.speed = 0.2 + Math.random() * 0.15; // Vitesse lente
+            enemy.userData.turnSpeed = 0.01;
+            enemy.userData.state = 'wander'; // 'wander' ou 'return'
+            
             return enemy;
         }
 
@@ -355,17 +372,24 @@
             const group = new THREE.Group();
             const sand = new THREE.Mesh(new THREE.CylinderGeometry(8 * scale, 10 * scale, 3, 12), new THREE.MeshToonMaterial({ color: 0xffcc66 }));
             sand.position.y = -0.5;
+            sand.receiveShadow = true;
+            sand.castShadow = true;
             group.add(sand);
 
             const palmCount = 1 + Math.floor(Math.random() * 4);
             for(let p = 0; p < palmCount; p++) {
                 const palm = new THREE.Group();
                 const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3*scale, 0.5*scale, 8*scale, 8), new THREE.MeshToonMaterial({color:0x8b4513}));
-                trunk.position.y = 4*scale; palm.add(trunk);
+                trunk.position.y = 4*scale; 
+                trunk.castShadow = true;
+                trunk.receiveShadow = true;
+                palm.add(trunk);
                 for(let i=0; i<5; i++) {
                     const leaf = new THREE.Mesh(new THREE.SphereGeometry(2.5*scale, 8, 4), new THREE.MeshToonMaterial({color:0x2e7d32}));
                     leaf.scale.set(1.5, 0.1, 0.4); leaf.position.y = 8*scale;
-                    leaf.rotation.y = (i/5)*Math.PI*2; leaf.rotation.z = 0.5; palm.add(leaf);
+                    leaf.rotation.y = (i/5)*Math.PI*2; leaf.rotation.z = 0.5; 
+                    leaf.castShadow = true;
+                    palm.add(leaf);
                 }
                 const a = Math.random()*Math.PI*2; const d = Math.random()*5*scale;
                 palm.position.set(Math.cos(a)*d, 0, Math.sin(a)*d);
@@ -402,10 +426,10 @@
             }
             answers.sort(() => Math.random() - 0.5);
 
-            // PLUS PROCHE : 60 à 100 unités au lieu de 150+
+            // Distance de spawn moyenne (50-90)
             answers.forEach(ans => {
                 const a = Math.random()*Math.PI*2;
-                const d = 70 + Math.random()*40; 
+                const d = 50 + Math.random()*40; 
                 enemyShips.push(createEnemyShip(playerShip.position.x + Math.cos(a)*d, playerShip.position.z + Math.sin(a)*d, ans));
             });
         }
@@ -417,28 +441,46 @@
             explosions.push({mesh:m, scale:1, opacity:1});
         }
 
-        function createWakeParticle() {
-            if(Math.abs(shipPhys.speed) < 0.1) return;
-            const geo = new THREE.SphereGeometry(0.5 + Math.random(), 6, 6);
-            const mat = new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.6});
+        function createWakeParticle(sourceMesh, isEnemy = false) {
+            // Sillage arrière (bulles)
+            const geo = new THREE.SphereGeometry(isEnemy ? 0.3 : 0.5 + Math.random(), 5, 5);
+            const mat = new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.5});
             const p = new THREE.Mesh(geo, mat);
-            // Position à l'arrière du bateau
-            const back = new THREE.Vector3(0, 0, 5).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerShip.rotation.y);
-            p.position.copy(playerShip.position).add(back);
+            
+            // Position à l'arrière
+            const offsetZ = isEnemy ? 3 : 5;
+            const back = new THREE.Vector3(0, 0, offsetZ).applyAxisAngle(new THREE.Vector3(0, 1, 0), sourceMesh.rotation.y);
+            p.position.copy(sourceMesh.position).add(back);
             p.position.y = 0.1;
+            
             scene.add(p);
             shipWake.push({mesh: p, life: 1, scale: 1});
         }
 
-        function createFoamCircle() {
-            const geo = new THREE.TorusGeometry(5, 0.1, 8, 32);
-            const mat = new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.5});
-            const circle = new THREE.Mesh(geo, mat);
-            circle.rotation.x = Math.PI / 2;
-            circle.position.copy(playerShip.position);
-            circle.position.y = 0.05;
-            scene.add(circle);
-            foamCircles.push({mesh: circle, life: 1, scale: 1});
+        function createBowWave(sourceMesh) {
+            // Vagues d'étrave (arcs devant le bateau)
+            // Création de 2 arcs (gauche et droite)
+            const sides = [1, -1];
+            sides.forEach(side => {
+                // RingGeometry(inner, outer, thetaSegments, phiStart, phiLength)
+                const geo = new THREE.RingGeometry(1.5, 2.0, 16, 0, Math.PI / 5); 
+                const mat = new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.6, side: THREE.DoubleSide});
+                const wave = new THREE.Mesh(geo, mat);
+                
+                wave.rotation.x = -Math.PI / 2;
+                // Rotation Y pour écarter l'arc du centre
+                // Ajustement pour pointer vers l'avant et s'écarter
+                const baseRot = sourceMesh.rotation.y + Math.PI; // Avant
+                wave.rotation.z = baseRot + (side * Math.PI / 6); // Angle d'ouverture
+
+                // Position devant
+                const fwd = new THREE.Vector3(0, 0, -2).applyAxisAngle(new THREE.Vector3(0, 1, 0), sourceMesh.rotation.y);
+                wave.position.copy(sourceMesh.position).add(fwd);
+                wave.position.y = 0.1;
+
+                scene.add(wave);
+                bowWaves.push({mesh: wave, life: 1, scale: 1, expandDir: side, baseRot: baseRot});
+            });
         }
 
         // --- Contrôles ---
@@ -495,7 +537,7 @@
                 return;
             }
 
-            // Physics
+            // --- Physique du Joueur ---
             if(input.up) shipPhys.speed += shipPhys.acceleration;
             if(input.down) shipPhys.speed -= shipPhys.acceleration;
             shipPhys.speed *= shipPhys.friction;
@@ -508,7 +550,7 @@
             playerShip.position.add(fwd.multiplyScalar(shipPhys.speed));
             if(shipWheel) shipWheel.rotation.z = THREE.MathUtils.lerp(shipWheel.rotation.z, input.left?1:(input.right?-1:0), 0.1);
 
-            // Collisions
+            // Collisions Joueur-Île
             islands.forEach(isl => {
                 if(playerShip.position.distanceTo(isl.position) < isl.userData.radius + 5) {
                     const p = new THREE.Vector3().subVectors(playerShip.position, isl.position).normalize();
@@ -516,30 +558,81 @@
                 }
             });
 
-            // Effects
-            if(Math.random() > 0.7) createWakeParticle();
-            if(Math.abs(shipPhys.speed) > 0.1 && Math.random() > 0.96) createFoamCircle();
+            // --- Effets Eau Joueur ---
+            if(Math.random() > 0.7 && Math.abs(shipPhys.speed) > 0.1) createWakeParticle(playerShip, false);
+            // Création arc de vague si vitesse suffisante
+            if(Math.abs(shipPhys.speed) > 0.3 && Math.random() > 0.85) createBowWave(playerShip);
 
-            // Wake & Foam update
+            // --- IA Ennemis ---
+            enemyShips.forEach(e => {
+                // Mouvement de flottement
+                e.position.y = Math.sin(time*2 + e.position.x)*0.3;
+
+                // Logique de déplacement
+                const distToPlayer = e.position.distanceTo(playerShip.position);
+                const dirToPlayer = new THREE.Vector3().subVectors(playerShip.position, e.position);
+                const angleToPlayer = Math.atan2(dirToPlayer.x, dirToPlayer.z); // Math.atan2(x, z) donne l'angle en radians
+                
+                // Si trop loin (> 100), se tourne vers le joueur
+                if (distToPlayer > 100) {
+                    // Cible l'angle vers le joueur (ajusté car le modèle pointe vers -Z ou +Z selon l'import, ici Three.js 0 rotation regarde +Z par defaut mais on avance en -Z généralement, ajustement : Math.PI)
+                    // Calcul simple : on veut que l'arrière du bateau (Z+) pointe à l'opposé, ou l'avant (Z-) pointe vers joueur.
+                    // Three.js standard : 0 rad = +Z.
+                    const targetRot = Math.atan2(dirToPlayer.x, dirToPlayer.z) + Math.PI; // +PI pour regarder "vers" le joueur avec l'avant
+                    
+                    // Lerp rotation pour tourner doucement
+                    let diff = targetRot - e.rotation.y;
+                    // Normaliser l'angle entre -PI et PI pour prendre le chemin le plus court
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    
+                    e.rotation.y += diff * 0.02;
+                } else if (distToPlayer < 30) {
+                    // Si trop près, tourne un peu aléatoirement pour éviter
+                     e.rotation.y += 0.02;
+                } else {
+                     // Sinon, petite variation aléatoire
+                     e.rotation.y += Math.sin(time * 0.5 + e.userData.value) * 0.01;
+                }
+
+                // Avancer
+                const eFwd = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), e.rotation.y);
+                e.position.add(eFwd.multiplyScalar(e.userData.speed));
+
+                // Créer sillage ennemi
+                if(Math.random() > 0.8) createWakeParticle(e, true);
+
+                // Collision Ennemi-Joueur
+                if(distToPlayer < 10) {
+                    const p = dirToPlayer.normalize();
+                    playerShip.position.add(p); shipPhys.speed *= -0.5;
+                }
+            });
+
+            // --- Updates Particules (Sillage & Vagues) ---
+            
+            // Bulles de sillage
             for(let i=shipWake.length-1; i>=0; i--) {
                 const w = shipWake[i]; w.life -= 0.02; w.scale += 0.05;
                 w.mesh.scale.setScalar(w.scale); w.mesh.material.opacity = w.life;
                 if(w.life <= 0) { scene.remove(w.mesh); shipWake.splice(i, 1); }
             }
-            for(let i=foamCircles.length-1; i>=0; i--) {
-                const f = foamCircles[i]; f.life -= 0.01; f.scale += 0.1;
-                f.mesh.scale.setScalar(f.scale); f.mesh.material.opacity = f.life;
-                if(f.life <= 0) { scene.remove(f.mesh); foamCircles.splice(i, 1); }
-            }
 
-            // Enemies
-            enemyShips.forEach(e => {
-                e.position.y = Math.sin(time*2 + e.position.x)*0.3;
-                if(playerShip.position.distanceTo(e.position) < 10) {
-                    const p = new THREE.Vector3().subVectors(playerShip.position, e.position).normalize();
-                    playerShip.position.add(p); shipPhys.speed *= -0.5;
-                }
-            });
+            // Vagues d'étrave (arcs)
+            for(let i=bowWaves.length-1; i>=0; i--) {
+                const w = bowWaves[i]; 
+                w.life -= 0.03; // Disparition rapide
+                w.scale += 0.05; // Grandit
+                
+                // Déplacement latéral léger pour simuler l'écartement
+                w.mesh.scale.setScalar(w.scale);
+                w.mesh.material.opacity = w.life;
+                
+                // Optionnel : faire tourner l'arc légèrement vers l'extérieur
+                // w.mesh.rotation.z += w.expandDir * 0.01; 
+
+                if(w.life <= 0) { scene.remove(w.mesh); bowWaves.splice(i, 1); }
+            }
 
             // Cannonballs
             for(let i=cannonballs.length-1; i>=0; i--) {
@@ -570,19 +663,33 @@
                 if(ex.opacity <= 0) { scene.remove(ex.mesh); explosions.splice(i, 1); }
             }
 
-            // Camera
+            // Camera Update
             const offset = new THREE.Vector3();
             const lookAt = playerShip.position.clone();
-            if(currentCamMode === 0) offset.set(0, 100, 40);
+
+            if(currentCamMode === 0) {
+                // Vue Top (inchangée, ou légèrement ajustée si besoin)
+                offset.set(0, 100, 40);
+            }
             else if(currentCamMode === 1) {
+                // Vue FPS / Canon
                 const f = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerShip.rotation.y);
                 camera.position.copy(playerShip.position).add(new THREE.Vector3(0, 6, 0)).add(f.multiplyScalar(2));
                 camera.lookAt(playerShip.position.clone().add(f.multiplyScalar(100)));
             } else {
+                // --- VUE MODIFIÉE (Mode 2 - Chase) ---
+                // On veut voir plus l'horizon.
+                // Donc on abaisse la caméra (Y plus bas) et on regarde plus loin devant/haut.
                 const b = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerShip.rotation.y);
-                offset.copy(b).multiplyScalar(35).add(new THREE.Vector3(0, 18, 0));
-                lookAt.y += 5;
+                
+                // Avant: multiplyScalar(35).add(0, 18, 0)
+                // Après: multiplyScalar(45) pour reculer un peu plus, add(0, 12, 0) pour descendre la caméra plus près de l'eau
+                offset.copy(b).multiplyScalar(45).add(new THREE.Vector3(0, 14, 0));
+                
+                // On regarde le bateau, mais un peu au dessus (Y+10) pour incliner la caméra vers l'horizon
+                lookAt.y += 12; 
             }
+
             if(currentCamMode !== 1) {
                 camera.position.lerp(playerShip.position.clone().add(offset), 0.1);
                 camera.lookAt(lookAt);
